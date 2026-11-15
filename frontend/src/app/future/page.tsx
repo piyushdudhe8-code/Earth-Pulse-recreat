@@ -244,8 +244,8 @@ export default function FuturePage() {
                 onChange={(event) => selectThreshold(Number(event.target.value))}
               />
               <span className="threshold-control__bounds" aria-hidden="true">
-                <span>{variable === "temperature" ? "−20°C" : "0 mm"}</span>
-                <span>{variable === "temperature" ? "50°C" : "5,000 mm"}</span>
+                <span>{variable === "temperature" ? "−20°C" : "0"}</span>
+                <span>{variable === "temperature" ? "50°C" : "5,000"}</span>
               </span>
             </label>
             <p className="question-preview">

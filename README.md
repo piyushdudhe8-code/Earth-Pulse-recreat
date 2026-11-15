@@ -40,14 +40,16 @@ Invoke-RestMethod `
   -Uri http://localhost:8000/api/analyze `
   -Method Post `
   -ContentType "application/json" `
-  -Body '{"lat":38.9,"lon":-77.04,"variable":"temperature","start_year":2005,"end_year":2025,"frequency":"monthly"}'
+  -Body '{"lat":38.9,"lon":-77.04,"variable":"temperature","frequency":"monthly"}'
 ```
 
-Set `variable` to `temperature` or `rainfall`. The returned monthly and annual series preserve missing values as `null`; only complete years are used for trend tests. The analysis needs at least 10 complete years. If NASA POWER cannot provide enough data, the API returns HTTP 422 with coverage details rather than an estimate. NASA responses are cached for 24 hours in `backend/data/nasa_power_cache.sqlite3` (override the path with `EARTH_PULSE_CACHE_PATH`).
+Set `variable` to `temperature` or `rainfall`. When `start_year` and `end_year` are omitted, the backend discovers the latest complete year from NASA's actual response and selects the latest 20 complete years. Explicit start and end years are also accepted. The response includes the original NASA parameter and unit, source URL, NASA response version, nearest-point geometry, UTC retrieval time, and whether the data was `live` or `cached`. Cached results retain their original retrieval time and are never labeled live. The returned series preserve missing values as `null`; precipitation is not converted from NASA's source units. If NASA POWER cannot provide the requested coverage, the API returns an error with availability details rather than inventing or substituting values. NASA responses are cached for 24 hours in `backend/data/nasa_power_cache.sqlite3` (override the path with `EARTH_PULSE_CACHE_PATH`).
+
+The connected parameters are NASA POWER `T2M` and `PRECTOTCORR`. Monthly meteorological data are MERRA-2 reanalysis, labeled `NASA POWER (MERRA-2)` and `reanalysis / model-derived`; a point query refers to the nearest NASA grid cell, not a city or country average. See the [official NASA POWER monthly API documentation](https://power.larc.nasa.gov/docs/services/api/temporal/monthly/).
 
 ### Estimate a future probability
 
-The `/future` page sends a request to `POST http://localhost:8000/api/probability`. For example:
+The `/future` page sends a request to `POST http://localhost:8000/api/probability` and omits the historical years so NASA's latest complete years are discovered dynamically. For a manually bounded request:
 
 ```powershell
 Invoke-RestMethod `
@@ -57,7 +59,7 @@ Invoke-RestMethod `
   -Body '{"lat":38.9,"lon":-77.04,"variable":"temperature","condition":"above","threshold":40,"time_window":"next_summer","start_year":2005,"end_year":2025}'
 ```
 
-Use `time_window: "year"` with a future `target_year` for a calendar-year estimate. Results include the estimated probability and range, the historical count, source data, assumptions, and limitations. This is a statistical estimate based on historical data, not an official climate forecast.
+Use `time_window: "year"` with a future `target_year` for a calendar-year estimate. Results include the estimated probability and range, the historical count, source data, cache status, assumptions, and limitations. This is a statistical estimate based on historical data, not an official climate forecast.
 
 ### Search for a place
 
@@ -94,6 +96,8 @@ Run backend tests from the `backend` folder with:
 ```powershell
 pytest
 ```
+
+The real-data audit and documented resolutions are in [docs/REAL_DATA_AUDIT.md](docs/REAL_DATA_AUDIT.md).
 
 ## Environment settings
 
