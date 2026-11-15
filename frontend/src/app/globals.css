@@ -342,16 +342,18 @@ button, a { -webkit-tap-highlight-color: transparent; }
 
 .site-footer {
   display: flex;
-  min-height: 84px;
+  min-height: 106px;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 12px;
+  gap: 7px;
   padding: 20px;
   background: #0b1d35;
   color: #d2e0e8;
   text-align: center;
 }
 .site-footer p { margin: 0; font-size: 16px; }
+.site-footer__disclaimer { max-width: 900px; color: #aebfcb; font-size: 14px !important; }
 .footer-pulse { width: 8px; height: 8px; border-radius: 50%; background: #78d5a5; box-shadow: 0 0 12px rgba(120, 213, 165, .7); }
 
 .placeholder-page { display: flex; min-height: 100vh; flex-direction: column; align-items: flex-start; justify-content: center; padding: 28px clamp(24px, 10vw, 160px); background: linear-gradient(135deg, #f7f8f4, #eaf3ed); }
@@ -627,13 +629,49 @@ button, a { -webkit-tap-highlight-color: transparent; }
 .historical-chance__icon { flex: 0 0 auto; color: var(--earth); font-size: 24px; }
 .historical-chance p { margin: 0; color: var(--ink); font-size: 18px; line-height: 1.5; }
 .probability-result > .source-note { margin-bottom: 0; }
+.projection-disclaimer { margin: 17px 0 0; padding: 13px 15px; border-left: 4px solid var(--orange); border-radius: 3px 8px 8px 3px; background: #fff6ed; color: #653916; font-size: 17px; font-weight: 750; }
+.projection-chart-heading { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 8px 18px; margin-top: 24px; }
+.projection-chart-heading h3 { margin: 0; color: var(--space); }
+.projection-chart-heading strong { color: #744018; font-size: 15px; }
+.ensemble-value { margin: 18px 0; font-size: 20px; }
+.projection-model-count { margin-top: 18px; padding: 16px; border-left: 4px solid var(--ocean); border-radius: 4px 10px 10px 4px; background: #edf6f6; color: #173f47; }
+.projection-model-count p { margin: 0; font-size: 18px; font-weight: 700; }
+.projection-model-table-wrap { max-width: 100%; overflow-x: auto; }
+.projection-model-table { width: 100%; border-collapse: collapse; font-size: 15px; }
+.projection-model-table th, .projection-model-table td { padding: 10px; border-bottom: 1px solid #dfe8e2; text-align: left; vertical-align: top; }
+.projection-model-table thead th { color: var(--muted); }
+.cmr-search-panel { margin-top: 22px; padding: 20px; border: 1px solid #dce7df; border-radius: 14px; background: #fbfdfb; }
+.cmr-search-panel h2 { margin: 0; color: var(--space); font-size: 22px; }
+.cmr-search-form { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; margin: 18px 0; }
+.cmr-search-form label { display: grid; gap: 6px; color: var(--ink); font-size: 16px; font-weight: 700; }
+.cmr-search-form input { width: 100%; min-height: 44px; padding: 8px 10px; border: 1px solid #b9c9c1; border-radius: 8px; background: #fff; color: var(--ink); font: inherit; }
+.cmr-search-form fieldset { grid-column: 1 / -1; margin: 0; padding: 12px; border: 1px solid #cbd9d1; border-radius: 9px; }
+.cmr-search-form legend { padding: 0 5px; font-size: 15px; font-weight: 700; }
+.cmr-bounds-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+.cmr-search-form .tool-primary-button { grid-column: 1 / -1; }
+.cmr-result-card { margin-top: 16px; padding: 18px; border: 1px solid #dce7df; border-radius: 12px; background: #fff; }
+.cmr-result-card h4 { margin: 0; color: var(--space); font-size: 19px; line-height: 1.35; }
+.cmr-result-card > p { overflow-wrap: anywhere; }
+.cmr-result-card .science-details { font-size: 15px; }
+.cmr-metadata-notice { padding: 11px 13px; border-left: 4px solid var(--ocean); background: #eef7f7; color: #163f47; font-size: 15px; }
+.cmr-result-card .provenance-links { padding-left: 18px; list-style: disc; }
 .tool-page > .site-footer { margin-top: 0; }
 
 @media (prefers-color-scheme: dark) {
   .tool-page { background: #0e1a27; }
   .tool-intro h1, .tool-section-heading h2, .comparison-heading h2, .climate-result__heading h2, .chart-card__heading h3, .stat-card strong, .science-panel__content h3, .science-panel__content h4, .probability-result h2 { color: #eef5f2; }
   .tool-intro .range-note { color: #a5dabb !important; }
-  .tool-panel, .climate-result, .probability-result { border-color: #324851; background: #142630; }
+  .tool-panel, .climate-result, .probability-result, .cmr-search-panel { border-color: #324851; background: #142630; }
+  .cmr-result-card { border-color: #354d55; background: #1a3039; }
+  .cmr-result-card h4, .cmr-search-panel h2, .projection-chart-heading h3 { color: #eef5f2; }
+  .cmr-search-form label, .cmr-search-form legend { color: #e4edf0; }
+  .cmr-search-form input { border-color: #475b60; background: #172c35; color: #e4edf0; }
+  .cmr-metadata-notice { border-color: #74b7bf; background: #17383d; color: #c5e7e8; }
+  .projection-disclaimer { border-color: #eba06d; background: #38291f; color: #ffcfaa; }
+  .projection-chart-heading strong { color: #ffcfaa; }
+  .projection-model-count { border-color: #69b4c0; background: #17383d; color: #c5e7e8; }
+  .projection-model-table th, .projection-model-table td { border-color: #354d55; }
+  .projection-model-table thead th { color: #b5c5ce; }
   .chart-card, .science-panel, .stat-card { border-color: #354d55; background: #1a3039; }
   .step-badge, .variable-choice__icon { background: #254637; color: #b8e3c2; }
   .variable-choice, .place-search__row input, .place-search__results, .place-search__results button, .window-choice-grid button { border-color: #475b60; background: #172c35; color: #e4edf0; }
@@ -817,6 +855,9 @@ button, a { -webkit-tap-highlight-color: transparent; }
   .report-metadata, .report-facts { grid-template-columns: 1fr; }
   .provenance-grid { grid-template-columns: 1fr; }
   .provenance-panel__heading { align-items: flex-start; flex-direction: column; }
+  .cmr-search-form { grid-template-columns: 1fr; }
+  .cmr-bounds-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .cmr-search-form fieldset, .cmr-search-form .tool-primary-button { grid-column: auto; }
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -14,7 +14,7 @@ const copy = {
       "Use your location to see how temperature and rainfall changed over the last 20 years.",
     futureTitle: "Imagine the Future",
     futureDescription:
-      "Ask a yes/no question about the future, like “Will it be hotter than 40°C next summer?” and see the probability.",
+      "Ask a yes/no question about a future climate scenario and compare it with NASA model projections.",
     howTitle: "How it works",
     step1Title: "Pick a place",
     step1: "Choose somewhere on Earth that matters to you.",
@@ -40,6 +40,7 @@ const copy = {
     toolsLink: "Open tool",
     learnMore: "Learn about the data source",
     methodologyLink: "How the data and methods work",
+    aboutLink: "About Earth Pulse",
   },
   hi: {
     eyebrow: "हमारा ग्रह। आपकी जगह।",
@@ -50,7 +51,7 @@ const copy = {
       "अपनी जगह चुनें और देखें कि पिछले 20 सालों में तापमान और बारिश कैसे बदले हैं।",
     futureTitle: "भविष्य की कल्पना करें",
     futureDescription:
-      "भविष्य के बारे में हाँ या ना वाला सवाल पूछें, जैसे “क्या अगली गर्मियों में तापमान 40°C से ज़्यादा होगा?” और संभावना देखें।",
+      "भविष्य के जलवायु परिदृश्य के बारे में हाँ या ना वाला सवाल पूछें और NASA मॉडल प्रक्षेपणों से तुलना करें।",
     howTitle: "यह कैसे काम करता है",
     step1Title: "एक जगह चुनें",
     step1: "पृथ्वी पर ऐसी जगह चुनें जो आपके लिए मायने रखती हो।",
@@ -76,6 +77,7 @@ const copy = {
     toolsLink: "टूल खोलें",
     learnMore: "डेटा स्रोत के बारे में जानें",
     methodologyLink: "डेटा और तरीकों के बारे में जानें",
+    aboutLink: "Earth Pulse के बारे में",
   },
 } satisfies Record<Language, Record<string, string>>;
 
@@ -215,6 +217,9 @@ export default function HomePage() {
           </ul>
           <a className="methodology-link" href="/methodology">
             {text.methodologyLink} <span aria-hidden="true">↗</span>
+          </a>
+          <a className="methodology-link" href="/about">
+            {text.aboutLink} <span aria-hidden="true">↗</span>
           </a>
         </section>
       </main>

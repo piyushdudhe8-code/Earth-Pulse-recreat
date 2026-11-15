@@ -1,6 +1,16 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
+import {
+  CartesianGrid,
+  Legend,
+  Line,
+  LineChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
 import ErrorState from "@/components/ErrorState";
 import Footer from "@/components/Footer";
 import LocationControls from "@/components/LocationControls";
@@ -12,11 +22,17 @@ import {
   Coordinates,
   PlaceLocation,
   ProbabilityCondition,
-  ProbabilityResponse,
-  ProbabilityWindow,
-  estimateLocationProbability,
+  ProjectionModelResult,
+  ProjectionResponse,
+  analyzeProjection,
 } from "@/lib/api";
 import { useLanguage } from "@/lib/language";
+
+const SCENARIOS = [
+  { id: "ssp126", en: "SSP1-2.6 · lower emissions pathway", hi: "SSP1-2.6 · कम उत्सर्जन परिदृश्य" },
+  { id: "ssp245", en: "SSP2-4.5 · intermediate pathway", hi: "SSP2-4.5 · मध्यम परिदृश्य" },
+  { id: "ssp370", en: "SSP3-7.0 · higher emissions pathway", hi: "SSP3-7.0 · अधिक उत्सर्जन परिदृश्य" },
+] as const;
 
 function mapLocation(coordinates: Coordinates, hindi: boolean): PlaceLocation {
   return {
@@ -25,26 +41,30 @@ function mapLocation(coordinates: Coordinates, hindi: boolean): PlaceLocation {
   };
 }
 
-function ProbabilityGauge({ result, hindi }: { result: ProbabilityResponse; hindi: boolean }) {
-  return (
-    <div
-      className="probability-gauge"
-      role="img"
-      aria-label={
-        hindi
-          ? `अनुमानित संभावना ${Math.round(result.probability_percent)} प्रतिशत है। 95 प्रतिशत सीमा ${Math.round(result.confidence_range_percent[0])} से ${Math.round(result.confidence_range_percent[1])} प्रतिशत तक।`
-          : `Estimated probability ${Math.round(result.probability_percent)} percent, with a 95 percent bootstrap range from ${Math.round(result.confidence_range_percent[0])} to ${Math.round(result.confidence_range_percent[1])} percent`
-      }
-      style={{
-        background: `conic-gradient(#2f7d58 ${result.probability_percent}%, #e4ece7 0)`,
-      }}
-    >
-      <div className="probability-gauge__center">
-        <strong>{Math.round(result.probability_percent)}%</strong>
-        <span>{hindi ? "अनुमानित संभावना" : "estimated chance"}</span>
-      </div>
-    </div>
+function annualChartData(models: ProjectionModelResult[]) {
+  const rows = new Map<number, Record<string, number | null>>(
+    Array.from({ length: 86 }, (_, index) => [2015 + index, { year: 2015 + index }]),
   );
+  for (const model of models) {
+    const key = model.model;
+    for (const item of model.annual_values) {
+      const row = rows.get(item.year);
+      if (row) row[key] = item.value;
+    }
+  }
+  return [...rows.values()];
+}
+
+function projectionLimitationText(text: string, hindi: boolean): string {
+  if (!hindi) return text;
+  const translations: Record<string, string> = {
+    "This is a scenario-based climate projection, not a weather prediction or official forecast.": "यह चुने गए परिदृश्य पर आधारित जलवायु प्रक्षेपण है, मौसम की भविष्यवाणी या आधिकारिक पूर्वानुमान नहीं।",
+    "NASA selects the nearest 0.25° grid cell without interpolation; the point can differ from the requested coordinates and is not a city or country average.": "NASA बिना बीच के मान निकालने के निकटतम 0.25° ग्रिड सेल का उपयोग करता है; यह चुने निर्देशांक से अलग हो सकता है और शहर या देश का औसत नहीं है।",
+    "NASA may have missing values for a particular model, scenario, variable, place, or year; missing values are excluded, never filled with estimates.": "किसी मॉडल, परिदृश्य, चर, जगह या साल का डेटा गायब हो सकता है; उसे अनुमान से नहीं भरा जाता।",
+    "Model agreement is not a probability and does not guarantee what will happen.": "मॉडलों की सहमति संभावना नहीं है और भविष्य की गारंटी नहीं देती।",
+    "The API response does not provide an uncertainty interval for this point query; Earth Pulse does not invent one.": "इस बिंदु के लिए API ने अनिश्चितता की सीमा नहीं दी; Earth Pulse इसे बनाकर नहीं दिखाता।",
+  };
+  return translations[text] ?? text;
 }
 
 export default function FuturePage() {
@@ -53,12 +73,22 @@ export default function FuturePage() {
   const [location, setLocation] = useState<PlaceLocation | null>(null);
   const [variable, setVariable] = useState<ClimateVariable>("temperature");
   const [condition, setCondition] = useState<ProbabilityCondition>("above");
-  const [threshold, setThreshold] = useState(25);
-  const [timeWindow, setTimeWindow] = useState<ProbabilityWindow>("next_summer");
-  const [targetYear, setTargetYear] = useState(2030);
-  const [result, setResult] = useState<ProbabilityResponse | null>(null);
+  const [threshold, setThreshold] = useState(30);
+  const [scenario, setScenario] = useState<ProjectionResponse["scenario"]>("ssp245");
+  const [targetYear, setTargetYear] = useState(2050);
+  const [result, setResult] = useState<ProjectionResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const models = useMemo(
+    () => result?.model_results.length
+      ? result.model_results
+      : result?.ensemble
+        ? [result.ensemble]
+        : [],
+    [result],
+  );
+  const chartData = useMemo(() => annualChartData(models), [models]);
 
   const chooseLocation = (place: PlaceLocation) => {
     setLocation(place);
@@ -68,69 +98,67 @@ export default function FuturePage() {
 
   const chooseVariable = (nextVariable: ClimateVariable) => {
     setVariable(nextVariable);
-    setThreshold(nextVariable === "temperature" ? 25 : 500);
-    setResult(null);
-    setError(null);
-  };
-
-  const selectThreshold = (nextThreshold: number) => {
-    setThreshold(nextThreshold);
+    setThreshold(nextVariable === "temperature" ? 30 : 3);
     setResult(null);
   };
 
   const estimate = async () => {
-    if (!location) {
-      return;
-    }
+    if (!location) return;
     setLoading(true);
     setError(null);
     setResult(null);
     try {
-      const request = {
+      const projection = await analyzeProjection({
         lat: location.latitude,
         lon: location.longitude,
         variable,
         condition,
         threshold,
-        time_window: timeWindow,
-        ...(timeWindow === "year" ? { target_year: targetYear } : {}),
-      };
-      setResult(await estimateLocationProbability(request));
+        scenario,
+        target_year: targetYear,
+      });
+      setResult(projection);
     } catch (requestError) {
       setError(
         requestError instanceof Error
           ? requestError.message
           : hindi
-            ? "इस सवाल का अनुमान नहीं लगा सके। फिर कोशिश करें।"
-            : "We could not estimate this question. Please try again.",
+            ? "NASA का जलवायु प्रक्षेपण नहीं मिल सका। फिर कोशिश करें।"
+            : "NASA climate projection data could not be retrieved. Please try again.",
       );
     } finally {
       setLoading(false);
     }
   };
 
-  const unit =
-    result?.units ?? (variable === "temperature" ? "°C" : "NASA source units");
-  const periodName = hindi
-    ? timeWindow === "next_summer" ? "गर्मियाँ" : "कैलेंडर वर्ष"
-    : timeWindow === "next_summer" ? "summer seasons" : "calendar years";
+  const units = result?.units ?? (variable === "temperature" ? "C" : "mm/day");
+  const limit = variable === "temperature" ? { min: -20, max: 50, step: 1 } : { min: 0, max: 20, step: 0.1 };
+  const resultInterpretation = result
+    ? result.models_with_target_data > 0
+      ? hindi
+        ? `${result.models_with_target_data} उपलब्ध व्यक्तिगत मॉडलों में से ${result.models_meeting_condition} ने ${result.target_year} के लिए यह शर्त पूरी की। यह मॉडल सहमति है, संभावना नहीं।`
+        : result.interpretation
+      : hindi
+        ? `NASA एन्सेम्बल का ${result.target_year} का मान ${result.ensemble?.value ?? "—"} ${result.units} है। यह प्रक्षेपण है, संभावना नहीं।`
+        : result.interpretation
+    : "";
 
   return (
     <div className="tool-page">
       <ToolHeader currentPage="Imagine the Future" />
       <main className="tool-main">
         <section className="tool-intro" aria-labelledby="future-title">
-          <p className="section-kicker">{hindi ? "संभावना, पक्का वादा नहीं" : "A POSSIBILITY, NOT A PROMISE"}</p>
+          <p className="section-kicker">{hindi ? "जलवायु परिदृश्य, पक्का वादा नहीं" : "CLIMATE SCENARIOS, NOT PROMISES"}</p>
           <h1 id="future-title">{hindi ? "भविष्य की कल्पना करें" : "Imagine the Future"}</h1>
           <p>
             {hindi
-              ? "किसी जगह के बारे में साफ़ सवाल पूछें। हम NASA के असली पुराने डेटा से संभावना का अनुमान लगाते हैं — यह पक्का जवाब या आधिकारिक पूर्वानुमान नहीं है।"
-              : "Ask a clear question about a place. We use its real NASA history to estimate a probability — never a certainty or an official forecast."}
+              ? "NASA के वास्तविक जलवायु मॉडल प्रक्षेपणों से पूछें कि किसी साल का औसत तापमान या वर्षा दर आपकी सीमा से ऊपर या नीचे होगी।"
+              : "Ask whether a year's average temperature or precipitation rate is above or below a limit, using real NASA climate-model projections."}
           </p>
           <p className="range-note">
             {hindi
-              ? "NASA का जवाब पिछले 20 पूरे उपलब्ध वर्षों को तय करता है।"
-              : "NASA's response determines the latest 20 complete years available."}
+              ? "ये उत्सर्जन परिदृश्य पर आधारित जलवायु प्रक्षेपण हैं, मौसम का पूर्वानुमान नहीं।"
+              : "These are scenario-based climate projections, not weather forecasts."}
           </p>
         </section>
 
@@ -165,265 +193,237 @@ export default function FuturePage() {
           <div className="tool-section-heading">
             <span className="step-badge">2</span>
             <div>
-              <h2 id="question-title">{hindi ? "हाँ-या-ना वाला सवाल बनाएँ" : "Build your yes-or-no question"}</h2>
-              <p>{hindi ? "हम चुनी हुई अवधि का औसत बताते हैं, किसी खास दिन का नहीं।" : "We estimate the average over the selected period, not a particular day."}</p>
+              <h2 id="question-title">{hindi ? "अपना सवाल बनाएँ" : "Build your yes-or-no question"}</h2>
+              <p>{hindi ? "हम पूरे साल के औसत की तुलना करते हैं।" : "We compare annual averages from NASA's monthly projections."}</p>
             </div>
           </div>
 
           <fieldset className="question-fieldset">
-            <legend>{hindi ? "क्या देखें?" : "What should we look at?"}</legend>
+            <legend>{hindi ? "कौन सा चर?" : "Which variable?"}</legend>
             <div className="variable-choice-grid">
-              <button
-                className={`variable-choice${variable === "temperature" ? " is-selected" : ""}`}
-                type="button"
-                aria-pressed={variable === "temperature"}
-                onClick={() => chooseVariable("temperature")}
-              >
-                <span className="variable-choice__icon" aria-hidden="true">🌡️</span>
-                <span>
-                  <strong>{hindi ? "तापमान" : "Temperature"}</strong>
-                  <small>{hindi ? "इस अवधि का औसत तापमान" : "Average temperature for the period"}</small>
-                </span>
-              </button>
-              <button
-                className={`variable-choice${variable === "rainfall" ? " is-selected" : ""}`}
-                type="button"
-                aria-pressed={variable === "rainfall"}
-                onClick={() => chooseVariable("rainfall")}
-              >
-                <span className="variable-choice__icon" aria-hidden="true">🌧️</span>
-                <span>
-                  <strong>{hindi ? "बारिश" : "Rainfall"}</strong>
-                  <small>
-                    {hindi
-                      ? "NASA की मूल इकाई में औसत सुधारित वर्षा दर"
-                      : "Average corrected precipitation in NASA's original units"}
-                  </small>
-                </span>
-              </button>
-            </div>
-          </fieldset>
-
-          <fieldset className="question-fieldset">
-            <legend>{hindi ? "आपकी शर्त क्या है?" : "What is your condition?"}</legend>
-            <div className="condition-choice" role="group" aria-label={hindi ? "ज़्यादा या कम चुनें" : "Choose above or below"}>
-              <button
-                className={condition === "above" ? "is-selected" : ""}
-                type="button"
-                aria-pressed={condition === "above"}
-                onClick={() => {
-                  setCondition("above");
-                  setResult(null);
-                }}
-              >
-                {hindi ? "से ज़्यादा" : "Above"}
-              </button>
-              <button
-                className={condition === "below" ? "is-selected" : ""}
-                type="button"
-                aria-pressed={condition === "below"}
-                onClick={() => {
-                  setCondition("below");
-                  setResult(null);
-                }}
-              >
-                {hindi ? "से कम" : "Below"}
-              </button>
-            </div>
-            <label className="threshold-control" htmlFor="threshold">
-              <span>
-                {hindi ? "आपकी सीमा" : "Your threshold"} <strong>{threshold} {unit}</strong>
-              </span>
-              <input
-                id="threshold"
-                type="range"
-                min={variable === "temperature" ? -20 : 0}
-                max={variable === "temperature" ? 50 : 5000}
-                step={variable === "temperature" ? 1 : 25}
-                value={threshold}
-                onChange={(event) => selectThreshold(Number(event.target.value))}
-              />
-              <span className="threshold-control__bounds" aria-hidden="true">
-                <span>{variable === "temperature" ? "−20°C" : "0"}</span>
-                <span>{variable === "temperature" ? "50°C" : "5,000"}</span>
-              </span>
-            </label>
-            <p className="question-preview">
-              {hindi
-                ? `क्या ${variable === "temperature" ? "औसत तापमान" : "औसत सुधारित वर्षा दर"} ${threshold} ${unit} ${condition === "above" ? "से ज़्यादा" : "से कम"} होगी?`
-                : `Will the ${variable === "temperature" ? "average temperature" : "average corrected precipitation rate"} be ${condition} ${threshold} ${unit}?`}
-            </p>
-          </fieldset>
-
-          <fieldset className="question-fieldset">
-            <legend>{hindi ? "कब?" : "When?"}</legend>
-            <div className="window-choice-grid" role="group" aria-label={hindi ? "भविष्य की अवधि चुनें" : "Choose a future time window"}>
-              <button
-                className={timeWindow === "next_summer" ? "is-selected" : ""}
-                type="button"
-                aria-pressed={timeWindow === "next_summer"}
-                onClick={() => {
-                  setTimeWindow("next_summer");
-                  setResult(null);
-                }}
-              >
-                <strong>{hindi ? "अगली गर्मी" : "Next summer"}</strong>
-                <span>{hindi ? "आपके गोलार्ध के अनुसार" : "Based on your hemisphere"}</span>
-              </button>
-              {[2030, 2035].map((year) => (
+              {(["temperature", "rainfall"] as const).map((item) => (
                 <button
-                  className={timeWindow === "year" && targetYear === year ? "is-selected" : ""}
+                  className={`variable-choice${variable === item ? " is-selected" : ""}`}
                   type="button"
-                  aria-pressed={timeWindow === "year" && targetYear === year}
-                  key={year}
-                  onClick={() => {
-                    setTimeWindow("year");
-                    setTargetYear(year);
-                    setResult(null);
-                  }}
+                  aria-pressed={variable === item}
+                  key={item}
+                  onClick={() => chooseVariable(item)}
                 >
-                  <strong>{year}</strong>
-                  <span>{hindi ? "कैलेंडर वर्ष का औसत या कुल" : "Calendar-year average or total"}</span>
+                  <span className="variable-choice__icon" aria-hidden="true">{item === "temperature" ? "🌡️" : "🌧️"}</span>
+                  <span><strong>{item === "temperature" ? (hindi ? "तापमान" : "Temperature") : (hindi ? "वर्षा दर" : "Precipitation rate")}</strong></span>
                 </button>
               ))}
             </div>
           </fieldset>
 
-          <button
-            className="tool-primary-button"
-            type="button"
-            onClick={estimate}
-            disabled={!location || loading}
-          >
-            {loading
-              ? hindi ? "NASA का पुराना डेटा जाँच रहे हैं…" : "Checking NASA history…"
-              : hindi ? "संभावना का अनुमान लगाएँ" : "Estimate the chance"}
+          <fieldset className="question-fieldset">
+            <legend>{hindi ? "किस परिदृश्य में?" : "Which emissions scenario?"}</legend>
+            <div className="window-choice-grid">
+              {SCENARIOS.map((item) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  className={scenario === item.id ? "is-selected" : ""}
+                  aria-pressed={scenario === item.id}
+                  onClick={() => {
+                    setScenario(item.id);
+                    setResult(null);
+                  }}
+                >
+                  <strong>{item.id.toUpperCase()}</strong>
+                  <span>{hindi ? item.hi : item.en}</span>
+                </button>
+              ))}
+            </div>
+          </fieldset>
+
+          <fieldset className="question-fieldset">
+            <legend>{hindi ? "किस साल और किस सीमा पर?" : "What year and threshold?"}</legend>
+            <label className="target-year-control" htmlFor="projection-year">
+              <span>{hindi ? "लक्ष्य वर्ष" : "Target year"} <strong>{targetYear}</strong></span>
+              <input
+                id="projection-year"
+                type="range"
+                min={2015}
+                max={2100}
+                step={1}
+                value={targetYear}
+                onChange={(event) => {
+                  setTargetYear(Number(event.target.value));
+                  setResult(null);
+                }}
+              />
+            </label>
+            <div className="condition-choice" role="group" aria-label={hindi ? "शर्त चुनें" : "Choose above or below"}>
+              {(["above", "below"] as const).map((item) => (
+                <button
+                  key={item}
+                  className={condition === item ? "is-selected" : ""}
+                  type="button"
+                  aria-pressed={condition === item}
+                  onClick={() => {
+                    setCondition(item);
+                    setResult(null);
+                  }}
+                >
+                  {hindi ? item === "above" ? "से ज़्यादा" : "से कम" : item === "above" ? "Above" : "Below"}
+                </button>
+              ))}
+            </div>
+            <label className="threshold-control" htmlFor="projection-threshold">
+              <span>{hindi ? "सीमा" : "Threshold"} <strong>{threshold} {units}</strong></span>
+              <input
+                id="projection-threshold"
+                type="range"
+                min={limit.min}
+                max={limit.max}
+                step={limit.step}
+                value={threshold}
+                onChange={(event) => {
+                  setThreshold(Number(event.target.value));
+                  setResult(null);
+                }}
+              />
+            </label>
+            <p className="question-preview">
+              {hindi
+                ? `${targetYear} में ${variable === "temperature" ? "साल का औसत तापमान" : "साल की औसत वर्षा दर"} ${threshold} ${units} ${condition === "above" ? "से ज़्यादा" : "से कम"} होगी?`
+                : `Will the annual average ${variable === "temperature" ? "temperature" : "precipitation rate"} be ${condition} ${threshold} ${units} in ${targetYear}?`}
+            </p>
+          </fieldset>
+
+          <button className="tool-primary-button" type="button" onClick={estimate} disabled={!location || loading}>
+            {loading ? (hindi ? "NASA प्रक्षेपण जाँच रहे हैं…" : "Checking NASA projections…") : (hindi ? "मॉडल प्रक्षेपण देखें" : "Check model projections")}
           </button>
-          <p className="forecast-disclaimer">
+          <p className="projection-disclaimer">
             {hindi
-              ? "यह पुराने NASA डेटा पर आधारित सांख्यिकीय अनुमान है, आधिकारिक जलवायु पूर्वानुमान नहीं।"
-              : "This is a statistical estimate based on past NASA data, not an official climate forecast."}
+              ? "यह जलवायु प्रक्षेपण चुने गए परिदृश्य पर आधारित है, मौसम का पूर्वानुमान या पक्की संभावना नहीं।"
+              : "Climate projection (scenario-based), not a forecast. Model agreement is not a probability."}
           </p>
-          {loading && (
-            <LoadingState label={hindi ? "NASA का असली डेटा इस्तेमाल करके अनुमान जाँचा जा रहा है। थोड़ा समय लग सकता है।" : "Using real NASA data and testing the estimate. This can take a moment."} />
-          )}
-          {error && <ErrorState title={hindi ? "इस सवाल का अनुमान नहीं लगा सके" : "We could not estimate this question"} message={error} />}
-          {!location && (
-            <p className="help-note">{hindi ? "सवाल पूछने से पहले जगह चुनें।" : "Choose a place before asking a question."}</p>
-          )}
+          {loading && <LoadingState label={hindi ? "NASA मॉडल डेटा प्राप्त कर रहे हैं।" : "Retrieving real NASA model projection data."} />}
+          {error && <ErrorState title={hindi ? "प्रक्षेपण नहीं मिल सका" : "Projection data unavailable"} message={error} />}
+          {!location && <p className="help-note">{hindi ? "सवाल पूछने से पहले जगह चुनें।" : "Choose a place before asking a question."}</p>}
         </section>
 
-        {result && !loading && (
-          <section className="probability-result" aria-labelledby="probability-result-title" aria-live="polite">
-            <div className="probability-result__top">
-              <div>
-                <p className="section-kicker">{hindi ? "सांख्यिकीय अनुमान" : "A STATISTICAL ESTIMATE"}</p>
-                <h2 id="probability-result-title">
-                  {hindi
-                    ? `अनुमान है कि ${result.time_window === "next_summer" ? "गर्मियों में" : `${result.target_year} में`} ${variable === "temperature" ? "औसत तापमान" : "औसत सुधारित वर्षा दर"} के ${condition === "above" ? "से ज़्यादा" : "से कम"} होने की संभावना ${Math.round(result.probability_percent)}% है। अनुमान की सीमा ${Math.round(result.confidence_range_percent[0])}% से ${Math.round(result.confidence_range_percent[1])}% है। अतीत की ${result.historical_periods} अवधियों में यह ${result.historical_events} बार हुआ।`
-                    : result.plain_language}
-                </h2>
-              </div>
-              <ProbabilityGauge result={result} hindi={hindi} />
+        {result && (
+          <section className="probability-result projection-result" aria-labelledby="projection-result-title" aria-live="polite">
+            <p className="section-kicker">{hindi ? "मॉडल प्रक्षेपण" : "MODEL PROJECTION"}</p>
+            <h2 id="projection-result-title">{resultInterpretation}</h2>
+            {result.ensemble && (
+              <p className="ensemble-value">
+                {hindi ? "मल्टी-मॉडल एन्सेम्बल का सालाना औसत:" : "Multi-model ensemble annual average:"}{" "}
+                <strong>{result.ensemble.value} {result.units}</strong>
+              </p>
+            )}
+            <div className="projection-chart-heading">
+              <h3>{hindi ? "NASA जलवायु मॉडल प्रक्षेपण" : "NASA climate model projections"}</h3>
+              <strong>{hindi ? "परिदृश्य-आधारित जलवायु प्रक्षेपण, पूर्वानुमान नहीं" : "Climate projection (scenario-based), not a forecast"}</strong>
             </div>
-            <p className="probability-range">
-              {hindi ? "95% बूटस्ट्रैप सीमा:" : "95% bootstrap range:"}{" "}
-              <strong>
-                {Math.round(result.confidence_range_percent[0])}%–{Math.round(result.confidence_range_percent[1])}%
-              </strong>
+            <div className="trend-chart">
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={chartData} margin={{ top: 16, right: 18, bottom: 8, left: 8 }}>
+                  <CartesianGrid stroke="#dfe8e4" strokeDasharray="3 5" />
+                  <XAxis dataKey="year" type="number" domain={[2015, 2100]} tickCount={8} />
+                  <YAxis unit={` ${result.units}`} />
+                  <Tooltip />
+                  <Legend />
+                  {models.map((model, index) => (
+                    <Line
+                      key={model.model}
+                      type="monotone"
+                      dataKey={model.model}
+                      name={model.model === "ensemble" ? "Multi-model ensemble" : model.model}
+                      stroke={["#26734f", "#167d8d", "#e9824c", "#7458a6", "#bb5c3b", "#2870a0", "#6a853a"][index % 7]}
+                      dot={false}
+                      connectNulls={false}
+                    />
+                  ))}
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+            <p className="map-instruction">
+              {hindi
+                ? `${result.scenario.toUpperCase()} परिदृश्य · ${result.parameter_name} · ${result.units} · सालाना मान महीने के डेटा से दिन-भारित औसत हैं।`
+                : `${result.scenario.toUpperCase()} scenario · ${result.parameter_name} · ${result.units} · Annual values are day-weighted averages of monthly data.`}
             </p>
-            <div className="historical-chance">
-              <span className="historical-chance__icon" aria-hidden="true">↺</span>
+            <div className="projection-model-count">
               <p>
-                {hindi
-                  ? `पिछली ${result.historical_periods} उपलब्ध ${periodName} में यह `
-                  : `In the past ${result.historical_periods} available ${periodName}, this happened `}
-                <strong>{result.historical_events} {hindi ? "में से" : "out of"} {result.historical_periods}</strong>{" "}
-                {hindi
-                  ? `बार हुआ (${Math.round(result.historical_probability_percent)}%)।`
-                  : `times (${Math.round(result.historical_probability_percent)}%).`}
+                {result.models_with_target_data > 0
+                    ? hindi
+                      ? `${result.models_with_target_data} उपलब्ध व्यक्तिगत मॉडलों में से ${result.models_meeting_condition} इस शर्त को पूरा करते हैं। मॉडलों की सहमति संभावना नहीं है।`
+                      : `${result.models_meeting_condition} of ${result.models_with_target_data} available individual models meet this condition. Model agreement is not a guaranteed probability.`
+                    : hindi
+                      ? "व्यक्तिगत मॉडलों में इस साल का पूरा मान नहीं था; इसके बजाय एन्सेम्बल दिखाया गया है। कोई संभावना नहीं निकाली गई।"
+                      : "The individual models did not provide a complete value for this year; the ensemble is shown instead. No probability is calculated."}
               </p>
             </div>
-            <p className="forecast-disclaimer">
+            <p className="projection-disclaimer">
               {hindi
-                ? "यह पुराने NASA डेटा पर आधारित सांख्यिकीय अनुमान है, आधिकारिक जलवायु पूर्वानुमान नहीं।"
-                : "This is a statistical estimate based on past NASA data, not an official climate forecast."}
+                ? "यह जलवायु प्रक्षेपण चुने गए परिदृश्य पर आधारित है, मौसम का पूर्वानुमान नहीं।"
+                : "Climate projection (scenario-based), not a forecast."}
             </p>
-            <p className="source-note">
-              Source: {result.data_used.source} | Data type: {result.data_used.data_type}.{" "}
-              {result.data_used.cache_status === "cached"
-                ? `Cached data · retrieved ${result.data_used.retrieved_at_utc} UTC.`
-                : `Live NASA response · retrieved ${result.data_used.retrieved_at_utc} UTC.`}{" "}
-              <a href={result.data_used.source_url} target="_blank" rel="noreferrer">
-                {hindi ? "NASA POWER के इस अनुरोध को देखें" : "View this NASA POWER request"}
-              </a>
-            </p>
-            <details className="science-panel">
-              <summary>{hindi ? "यह अनुमान कैसे लगाया?" : "How was this estimated?"}</summary>
-              <div className="science-panel__content">
-                <p>{result.method}</p>
-                <dl className="science-details">
-                  <div>
-                    <dt>{hindi ? "जगह" : "Location"}</dt>
-                    <dd>{result.latitude.toFixed(3)}, {result.longitude.toFixed(3)}</dd>
-                  </div>
-                  <div>
-                    <dt>{hindi ? "निकटतम NASA ग्रिड सेल" : "Nearest NASA grid cell"}</dt>
-                    <dd>
-                      {result.data_used.grid_cell_latitude.toFixed(3)},{" "}
-                      {result.data_used.grid_cell_longitude.toFixed(3)}
-                    </dd>
-                  </div>
-                  <div>
-                    <dt>{hindi ? "भविष्य की अवधि" : "Future period"}</dt>
-                    <dd>{result.time_window} ({result.target_months.join(", ")})</dd>
-                  </div>
-                  <div>
-                    <dt>{hindi ? "पुराना डेटा" : "Historical data"}</dt>
-                    <dd>
-                      {result.data_used.requested_start_year}–{result.data_used.requested_end_year};{" "}
-                      {result.data_used.complete_periods} complete periods;{" "}
-                      {result.data_used.missing_periods} missing periods
-                    </dd>
-                  </div>
-                  <div>
-                    <dt>{hindi ? "पुराने डेटा में रुझान" : "Trend found in the historical record"}</dt>
-                    <dd>
-                      {result.data_used.trend_direction};{" "}
-                      {result.data_used.trend_rate_per_decade.toPrecision(4)} {unit} per decade;{" "}
-                      {result.data_used.trend_significant ? "statistically significant" : "not statistically significant"}
-                    </dd>
-                  </div>
-                  <div>
-                    <dt>{hindi ? "स्रोत की इकाइयाँ" : "Source units"}</dt>
-                    <dd>{result.data_used.source_units}; analysis values in {result.data_used.analysis_units}</dd>
-                  </div>
-                  <div>
-                    <dt>{hindi ? "NASA पैरामीटर" : "NASA parameter"}</dt>
-                    <dd>{result.data_used.parameter_name}</dd>
-                  </div>
-                </dl>
-                <h3>{hindi ? "मान्यताएँ" : "Assumptions"}</h3>
-                <ul>
-                  {result.assumptions.map((assumption) => (
-                    <li key={assumption}>{assumption}</li>
-                  ))}
-                </ul>
-                <h3>{hindi ? "सीमाएँ" : "Limitations"}</h3>
-                <ul>
-                  {result.limitations.map((limitation) => (
-                    <li key={limitation}>{limitation}</li>
-                  ))}
-                </ul>
+            <section className="provenance-panel" aria-label="NASA climate projection provenance">
+              <div className="provenance-panel__heading">
+                <div><p className="section-kicker">{hindi ? "डेटा की जाँच" : "DATA PROVENANCE"}</p><h3>{hindi ? "NASA प्रक्षेपण डेटा का स्रोत" : "NASA projection data source"}</h3></div>
+                <span className={result.cache_status === "live" ? "verified-data-badge" : "cached-data-badge"}>
+                  {result.cache_status === "live"
+                    ? "NASA DATA VERIFIED"
+                    : result.cache_status === "mixed"
+                      ? (hindi ? "लाइव + कैश डेटा" : "MIXED LIVE + CACHED DATA")
+                      : (hindi ? "कैश किया गया डेटा" : "CACHED DATA")}
+                </span>
               </div>
-            </details>
+              <dl className="provenance-grid">
+                <div><dt>{hindi ? "स्रोत / डेटासेट" : "Source / dataset"}</dt><dd>{result.source} · {result.dataset_name}</dd></div>
+                <div><dt>{hindi ? "संस्करण" : "Version"}</dt><dd>{result.dataset_version}</dd></div>
+                <div><dt>{hindi ? "पैरामीटर / इकाई" : "Parameter / unit"}</dt><dd>{result.parameter_name} · {result.units}</dd></div>
+                <div><dt>{hindi ? "परिदृश्य / लक्ष्य वर्ष" : "Scenario / target year"}</dt><dd>{result.scenario} · {result.target_year}</dd></div>
+                <div><dt>{hindi ? "अनुरोधित बिंदु (अक्षांश, देशांतर)" : "Requested point (lat, lon)"}</dt><dd>{result.latitude.toFixed(4)}, {result.longitude.toFixed(4)}</dd></div>
+                <div><dt>{hindi ? "NASA द्वारा लौटाया बिंदु (अक्षांश, देशांतर)" : "NASA returned point (lat, lon)"}</dt><dd>{result.grid_cell_latitude.toFixed(4)}, {result.grid_cell_longitude.toFixed(4)}</dd></div>
+                <div><dt>{hindi ? "डेटा प्रकार" : "Data type"}</dt><dd>{result.data_type}</dd></div>
+                <div><dt>{hindi ? "समय सीमा" : "Temporal coverage"}</dt><dd>{result.temporal_coverage}</dd></div>
+                <div><dt>{hindi ? "NASA से खोजे गए मॉडल" : "Models discovered from NASA"}</dt><dd>{result.discovered_models.join(", ")}</dd></div>
+                <div><dt>{hindi ? "प्राप्ति समय (UTC)" : "Retrieved at (UTC)"}</dt><dd>{result.retrieved_at_utc}{result.cache_status === "cached" ? (hindi ? " (कैश)" : " (cached)") : ""}</dd></div>
+              </dl>
+              <h4>{hindi ? "सीमाएँ" : "Limitations"}</h4>
+              <ul>{result.limitations.map((limitation) => <li key={limitation}>{projectionLimitationText(limitation, hindi)}</li>)}</ul>
+              <h4>{hindi ? "मॉडल द्वारा लौटाए गए मान" : "Values returned by model"}</h4>
+              <div className="projection-model-table-wrap">
+                <table className="projection-model-table">
+                  <thead>
+                    <tr>
+                      <th>{hindi ? "मॉडल" : "Model"}</th>
+                      <th>{result.target_year}</th>
+                      <th>{hindi ? "शर्त पूरी?" : "Meets condition?"}</th>
+                      <th>{hindi ? "प्राप्ति / कैश स्थिति" : "Retrieved / cache state"}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {models.map((model) => (
+                      <tr key={model.model}>
+                        <th scope="row">{model.model}</th>
+                        <td>{model.value === null ? (hindi ? "डेटा उपलब्ध नहीं" : "No data") : `${model.value} ${model.units}`}</td>
+                        <td>{model.meets_condition === null ? "—" : model.meets_condition ? (hindi ? "हाँ" : "Yes") : (hindi ? "नहीं" : "No")}</td>
+                        <td>{model.retrieved_at_utc} · {model.cache_status}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <div className="provenance-links">
+                {result.source_urls.map((url) => <a key={url} href={url} target="_blank" rel="noreferrer">
+                  {url.includes("/models?") ? (hindi ? "NASA मॉडल कैटलॉग" : "NASA model catalog") : (hindi ? "NASA प्रक्षेपण डेटा अनुरोध" : "NASA projection data request")}
+                </a>)}
+                <a href="https://power.larc.nasa.gov/docs/services/api/projection/" target="_blank" rel="noreferrer">{hindi ? "NASA Projection API के आधिकारिक दस्तावेज़" : "Official NASA Projection API documentation"}</a>
+              </div>
+            </section>
           </section>
         )}
       </main>
       <Footer>
         {hindi
-          ? "यह संभावना NASA डेटा पर एक सांख्यिकीय तरीके से निकला अनुमान है। भविष्य के बारे में पक्की बात नहीं।"
-          : "The probability describes one statistical method applied to NASA data. It is not certainty about the future."}
+          ? "यह NASA जलवायु मॉडल डेटा पर आधारित परिदृश्य है, निश्चित भविष्यवाणी नहीं।"
+          : "These are scenario-based NASA climate model projections, not a weather forecast or guaranteed probability."}
       </Footer>
     </div>
   );

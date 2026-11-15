@@ -15,6 +15,7 @@ export default function ToolHeader({ currentPage }: ToolHeaderProps) {
           "Research Lab": "रिसर्च लैब",
           "Research Report": "रिसर्च रिपोर्ट",
           "Methodology & Data Sources": "तरीके और डेटा स्रोत",
+          "About Earth Pulse": "Earth Pulse के बारे में",
         }[currentPage] ?? currentPage
       : currentPage;
 
@@ -52,6 +53,9 @@ export default function ToolHeader({ currentPage }: ToolHeaderProps) {
         </div>
         <Link className="tool-header__methodology" href="/methodology">
           {language === "hi" ? "तरीके" : "Methodology"}
+        </Link>
+        <Link className="tool-header__methodology" href="/about">
+          {language === "hi" ? "परिचय" : "About"}
         </Link>
         <Link className="tool-header__back" href="/">
           <span aria-hidden="true">←</span> {language === "hi" ? "Earth Pulse मुखपृष्ठ" : "Earth Pulse home"}

@@ -4,6 +4,8 @@ import Link from "next/link";
 import { FormEvent, useEffect, useState } from "react";
 import ErrorState from "@/components/ErrorState";
 import Footer from "@/components/Footer";
+import CMRCollectionList from "@/components/CMRCollectionList";
+import CMRSearchPanel from "@/components/CMRSearchPanel";
 import LocationControls from "@/components/LocationControls";
 import LocationMap from "@/components/LocationMap";
 import ToolHeader from "@/components/ToolHeader";
@@ -32,11 +34,6 @@ type VariableResult = {
 const hindiResearchCopy = {
   temperature: "हवा का तापमान",
   rainfall: "बारिश",
-  dataset: {
-    nasa_power: "NASA POWER",
-    merra_2: "MERRA-2",
-    gpm_imerg: "GPM IMERG",
-  },
   direction: {
     compare_variables:
       "एक ही वर्षों में तापमान और बारिश की तुलना करें। संबंध दिखने का मतलब यह नहीं कि एक चीज़ दूसरी का कारण है।",
@@ -336,6 +333,7 @@ export default function ResearchLab() {
                 ? "गणनाएँ NASA के डेटा और हमारे विश्लेषण इंजन से आती हैं। AI केवल समझाने में मदद करता है।"
                 : "Calculations come from NASA data and our analysis engine. AI only helps explain."}
             </p>
+            <CMRSearchPanel />
             {assistantLoading && (
               <div className="loading-skeleton-group" role="status" aria-live="polite">
                 <span className="sr-only">{hindi ? "सुझाव लोड हो रहे हैं" : "Loading research suggestions"}</span>
@@ -384,27 +382,9 @@ export default function ResearchLab() {
                   </ul>
                 </section>
                 <section aria-labelledby="assistant-datasets">
-                  <h3 id="assistant-datasets">{hindi ? "NASA डेटा स्रोत" : "NASA data sources"}</h3>
-                  <ul className="suggestion-list">
-                    {assistantResponse.suggested_datasets.map((dataset) => (
-                      <li key={dataset.id}>
-                        <strong>
-                          <a href={dataset.url} target="_blank" rel="noreferrer">
-                            {hindi
-                              ? hindiResearchCopy.dataset[dataset.id]
-                              : dataset.title}
-                          </a>
-                        </strong>
-                        <span>
-                          {hindi
-                            ? dataset.available_in_analysis
-                              ? "इस ऐप में विश्लेषण के लिए जुड़ा है।"
-                              : "स्रोत देखने के लिए लिंक; यह अभी विश्लेषण से जुड़ा नहीं है।"
-                            : dataset.description}
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
+                  <h3 id="assistant-datasets">{hindi ? "NASA CMR से लौटे कैटलॉग रिकॉर्ड" : "Catalogue records returned by NASA CMR"}</h3>
+                  <p>{assistantResponse.metadata_only_notice}</p>
+                  <CMRCollectionList collections={assistantResponse.suggested_datasets} hindi={hindi} />
                 </section>
                 <section aria-labelledby="assistant-directions">
                   <h3 id="assistant-directions">{hindi ? "शोध की दिशाएँ" : "Possible research directions"}</h3>

@@ -3,16 +3,11 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from app.models.catalog import CMRCollection
 
 class ResearchVariable(str, Enum):
     TEMPERATURE = "temperature"
     RAINFALL = "rainfall"
-
-
-class ResearchDatasetId(str, Enum):
-    NASA_POWER = "nasa_power"
-    MERRA_2 = "merra_2"
-    GPM_IMERG = "gpm_imerg"
 
 
 class ResearchDirectionId(str, Enum):
@@ -33,14 +28,6 @@ class ResearchVariableSuggestion(BaseModel):
     available_in_analysis: bool
 
 
-class ResearchDatasetSuggestion(BaseModel):
-    id: ResearchDatasetId
-    title: str
-    description: str
-    url: str
-    available_in_analysis: bool
-
-
 class ResearchDirectionSuggestion(BaseModel):
     id: ResearchDirectionId
     description: str
@@ -49,5 +36,6 @@ class ResearchDirectionSuggestion(BaseModel):
 class ResearchAssistantResponse(BaseModel):
     assistant_mode: Literal["llm", "guided"]
     suggested_variables: list[ResearchVariableSuggestion]
-    suggested_datasets: list[ResearchDatasetSuggestion]
+    suggested_datasets: list[CMRCollection]
     research_directions: list[ResearchDirectionSuggestion]
+    metadata_only_notice: str

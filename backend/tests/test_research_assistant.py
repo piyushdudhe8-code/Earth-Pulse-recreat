@@ -4,12 +4,48 @@ import json
 
 import pytest
 
+from app.models.catalog import (
+    CMRCollection,
+    CMRLink,
+    CMRSearchResponse,
+)
 from app.models.research import ResearchAssistantRequest
 from app.services import research_assistant
 
 
+def _catalog_result():
+    item = CMRCollection(
+        title="Synthetic precipitation catalogue test",
+        short_name="SYNTH_TEST",
+        version="01",
+        provider="TEST_PROVIDER",
+        abstract="Synthetic metadata fixture used only in this test.",
+        temporal_start="2000-01-01",
+        temporal_end="2025-01-01",
+        spatial_coverage=["-90 -180 90 180"],
+        concept_id="C0000000000-TEST",
+        official_links=[
+            CMRLink(
+                title="Test metadata",
+                rel="metadata",
+                href="https://cmr.earthdata.nasa.gov/test",
+                type="application/json",
+            )
+        ],
+        metadata_only_notice="Test metadata only.",
+        access_note="Test access note.",
+    )
+    return CMRSearchResponse(
+        search_url="https://cmr.earthdata.nasa.gov/search/collections.json?keyword=precipitation",
+        result_count=1,
+        collections=[item],
+        metadata_only_notice="Test metadata only.",
+    )
+
+
 def test_guided_suggestions_are_limited_to_connected_variables(monkeypatch):
     monkeypatch.delenv("EARTH_PULSE_LLM_API_KEY", raising=False)
+    monkeypatch.setattr(research_assistant, "search_collections", lambda _request: _catalog_result())
 
     response = asyncio.run(
         research_assistant.suggest_research(
@@ -20,10 +56,8 @@ def test_guided_suggestions_are_limited_to_connected_variables(monkeypatch):
     assert response.assistant_mode == "guided"
     assert [item.id.value for item in response.suggested_variables] == ["rainfall"]
     assert all(item.available_in_analysis for item in response.suggested_variables)
-    assert any(item.id.value == "gpm_imerg" for item in response.suggested_datasets)
-    assert not next(
-        item for item in response.suggested_datasets if item.id.value == "gpm_imerg"
-    ).available_in_analysis
+    assert response.suggested_datasets[0].concept_id == "C0000000000-TEST"
+    assert "not downloaded or analyzed" in response.metadata_only_notice
 
 
 def test_llm_can_only_select_preapproved_recommendations(monkeypatch):
@@ -35,7 +69,6 @@ def test_llm_can_only_select_preapproved_recommendations(monkeypatch):
                     "content": json.dumps(
                         {
                             "variables": ["temperature"],
-                            "datasets": ["nasa_power"],
                             "directions": ["check_data_gaps"],
                         }
                     )
@@ -56,6 +89,7 @@ def test_llm_can_only_select_preapproved_recommendations(monkeypatch):
         return FakeResponse(json.dumps(response_body).encode())
 
     monkeypatch.setattr(research_assistant, "urlopen", fake_urlopen)
+    monkeypatch.setattr(research_assistant, "search_collections", lambda _request: _catalog_result())
     response = asyncio.run(
         research_assistant.suggest_research(
             "Find a safe starting point for a local project."
@@ -64,7 +98,7 @@ def test_llm_can_only_select_preapproved_recommendations(monkeypatch):
 
     assert response.assistant_mode == "llm"
     assert [item.id.value for item in response.suggested_variables] == ["temperature"]
-    assert [item.id.value for item in response.suggested_datasets] == ["nasa_power"]
+    assert response.suggested_datasets[0].short_name == "SYNTH_TEST"
     assert "complete years" in response.research_directions[0].description
 
 
@@ -85,7 +119,6 @@ def test_llm_cannot_return_unapproved_ids(monkeypatch):
                     "content": json.dumps(
                         {
                             "variables": ["soil_moisture"],
-                            "datasets": ["nasa_power"],
                             "directions": ["check_data_gaps"],
                         }
                     )

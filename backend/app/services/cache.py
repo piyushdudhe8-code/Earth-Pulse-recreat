@@ -27,31 +27,7 @@ class SQLiteResponseCache:
     def get_entry(self, key: str) -> CachedResponse | None:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         with sqlite3.connect(self.path, timeout=10) as connection:
-            connection.execute(
-                """
-                CREATE TABLE IF NOT EXISTS api_response_cache (
-                    cache_key TEXT PRIMARY KEY,
-                    payload TEXT NOT NULL,
-                    expires_at REAL NOT NULL
-                )
-                """
-            )
-            columns = {
-                row[1]
-                for row in connection.execute(
-                    "PRAGMA table_info(api_response_cache)"
-                ).fetchall()
-            }
-            if "source_url" not in columns:
-                connection.execute(
-                    "ALTER TABLE api_response_cache "
-                    "ADD COLUMN source_url TEXT NOT NULL DEFAULT ''"
-                )
-            if "retrieved_at_utc" not in columns:
-                connection.execute(
-                    "ALTER TABLE api_response_cache "
-                    "ADD COLUMN retrieved_at_utc TEXT NOT NULL DEFAULT ''"
-                )
+            self._ensure_schema(connection)
             row = connection.execute(
                 """
                 SELECT payload, expires_at, source_url, retrieved_at_utc
@@ -86,33 +62,7 @@ class SQLiteResponseCache:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         serialized = json.dumps(payload, separators=(",", ":"), allow_nan=False)
         with sqlite3.connect(self.path, timeout=10) as connection:
-            connection.execute(
-                """
-                CREATE TABLE IF NOT EXISTS api_response_cache (
-                    cache_key TEXT PRIMARY KEY,
-                    payload TEXT NOT NULL,
-                    expires_at REAL NOT NULL,
-                    source_url TEXT NOT NULL DEFAULT '',
-                    retrieved_at_utc TEXT NOT NULL DEFAULT ''
-                )
-                """
-            )
-            columns = {
-                row[1]
-                for row in connection.execute(
-                    "PRAGMA table_info(api_response_cache)"
-                ).fetchall()
-            }
-            if "source_url" not in columns:
-                connection.execute(
-                    "ALTER TABLE api_response_cache "
-                    "ADD COLUMN source_url TEXT NOT NULL DEFAULT ''"
-                )
-            if "retrieved_at_utc" not in columns:
-                connection.execute(
-                    "ALTER TABLE api_response_cache "
-                    "ADD COLUMN retrieved_at_utc TEXT NOT NULL DEFAULT ''"
-                )
+            self._ensure_schema(connection)
             connection.execute(
                 """
                 INSERT INTO api_response_cache (
@@ -133,3 +83,40 @@ class SQLiteResponseCache:
                     retrieved_at_utc,
                 ),
             )
+
+    @staticmethod
+    def _ensure_schema(connection: sqlite3.Connection) -> None:
+        connection.execute(
+            """
+            CREATE TABLE IF NOT EXISTS api_response_cache (
+                cache_key TEXT PRIMARY KEY,
+                payload TEXT NOT NULL,
+                expires_at REAL NOT NULL,
+                source_url TEXT NOT NULL DEFAULT '',
+                retrieved_at_utc TEXT NOT NULL DEFAULT ''
+            )
+            """
+        )
+        for column in ("source_url", "retrieved_at_utc"):
+            columns = {
+                row[1]
+                for row in connection.execute(
+                    "PRAGMA table_info(api_response_cache)"
+                ).fetchall()
+            }
+            if column in columns:
+                continue
+            try:
+                connection.execute(
+                    f"ALTER TABLE api_response_cache "
+                    f"ADD COLUMN {column} TEXT NOT NULL DEFAULT ''"
+                )
+            except sqlite3.OperationalError:
+                columns = {
+                    row[1]
+                    for row in connection.execute(
+                        "PRAGMA table_info(api_response_cache)"
+                    ).fetchall()
+                }
+                if column not in columns:
+                    raise

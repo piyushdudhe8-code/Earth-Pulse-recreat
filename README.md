@@ -7,10 +7,22 @@ Earth Pulse is a simple, accessible starting point for exploring how Earth's cli
 - Node.js 20 or newer and npm
 - Python 3.10 or newer
 
+## Start both servers
+
+After installing the frontend dependencies and creating `backend\venv` with
+the packages in `backend\requirements.txt`, run this from the project root.
+It frees ports 3000 and 8000 and opens separate PowerShell windows for the
+frontend and backend:
+
+```powershell
+.\start-dev.ps1
+```
+
 ## Run the frontend
 
 ```powershell
 cd frontend
+Copy-Item .env.example .env.local
 npm.cmd install
 npm.cmd run dev
 ```
@@ -19,9 +31,10 @@ Open [http://localhost:3000](http://localhost:3000).
 
 ## Run the backend
 
-In a second terminal:
+In a second terminal, from the repository root:
 
 ```powershell
+Copy-Item .env.example .env
 cd backend
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
@@ -29,7 +42,7 @@ pip install -r requirements.txt
 uvicorn app.main:app --reload
 ```
 
-The health endpoint is at [http://localhost:8000/health](http://localhost:8000/health). The backend allows requests from `http://localhost:3000`.
+The health endpoint is at [http://localhost:8000/health](http://localhost:8000/health). The backend allows requests from `http://localhost:3000`, `http://127.0.0.1:3000`, and `http://192.168.225.145:3000`.
 
 ### Analyze NASA POWER data
 
@@ -47,27 +60,42 @@ Set `variable` to `temperature` or `rainfall`. When `start_year` and `end_year` 
 
 The connected parameters are NASA POWER `T2M` and `PRECTOTCORR`. Monthly meteorological data are MERRA-2 reanalysis, labeled `NASA POWER (MERRA-2)` and `reanalysis / model-derived`; a point query refers to the nearest NASA grid cell, not a city or country average. See the [official NASA POWER monthly API documentation](https://power.larc.nasa.gov/docs/services/api/temporal/monthly/).
 
-### Estimate a future probability
+### Ask a projection-based future question
 
-The `/future` page sends a request to `POST http://localhost:8000/api/probability` and omits the historical years so NASA's latest complete years are discovered dynamically. For a manually bounded request:
+The `/future` page uses NASA POWER's Projection API. It discovers the monthly model catalog and compares annual values from returned model projection data for the selected year and scenario. It does **not** calculate or display a probability. Model agreement is not a probability. The NASA ensemble is shown only when individual models have no usable target-year values. Projections are visibly separate from historical observations.
 
 ```powershell
 Invoke-RestMethod `
-  -Uri http://localhost:8000/api/probability `
+  -Uri http://localhost:8000/api/projection/models `
+  -Method Get
+
+Invoke-RestMethod `
+  -Uri http://localhost:8000/api/projection/analyze `
   -Method Post `
   -ContentType "application/json" `
-  -Body '{"lat":38.9,"lon":-77.04,"variable":"temperature","condition":"above","threshold":40,"time_window":"next_summer","start_year":2005,"end_year":2025}'
+  -Body '{"lat":39.74,"lon":-104.99,"variable":"temperature","condition":"above","threshold":30,"scenario":"ssp245","target_year":2050}'
 ```
 
-Use `time_window: "year"` with a future `target_year` for a calendar-year estimate. Results include the estimated probability and range, the historical count, source data, cache status, assumptions, and limitations. This is a statistical estimate based on historical data, not an official climate forecast.
+Projection API reference: [NASA POWER Projection API](https://power.larc.nasa.gov/docs/services/api/projection/). Supported scenario options are `ssp126`, `ssp245`, and `ssp370`. Monthly model availability is fetched from NASA before projection values are requested. NASA documents monthly data for 2015–2100 on a 0.25° grid using nearest-cell selection without interpolation. Missing model values are not filled; incomplete years remain unavailable. Read [NASA_API_INTEGRATION.md](docs/NASA_API_INTEGRATION.md) for documentation findings.
+
+### Search NASA dataset metadata
+
+The Research Assistant and its catalogue search use NASA's CMR collection service (`GET /api/cmr/collections`). Example:
+
+```powershell
+Invoke-RestMethod `
+  -Uri "http://localhost:8000/api/cmr/collections?variable=precipitation&topic=Precipitation&start_time=2020-01-01T00%3A00%3A00Z&end_time=2021-01-01T00%3A00%3A00Z&west=-10&south=-5&east=10&north=5"
+```
+
+CMR returns collection metadata only (title, short name, version, provider, summary, coverage, concept ID, and official links). Earth Pulse does not download or analyze data from these metadata results. Linked access may require a NASA Earthdata Login. The CMR documentation and field mappings are in [NASA_DATA_PROVENANCE.md](docs/NASA_DATA_PROVENANCE.md).
 
 ### Search for a place
 
 `GET http://localhost:8000/api/geocode?q=Washington%20DC` searches place names using OpenStreetMap Nominatim. The interactive maps use OpenStreetMap tiles and include attribution.
 
-### Research assistant
+### Research assistant and NASA CMR
 
-The Research Lab uses `POST /api/research-assistant` to recommend only pre-approved variables, NASA datasets, and research directions. Without an LLM key, it uses a small guided keyword matcher. To enable an optional OpenAI-compatible model, copy `.env.example` to `.env` and set `EARTH_PULSE_LLM_API_KEY` (and, if needed, the API URL and model). The key stays on the backend. The model can select from fixed IDs only; it cannot return climate values or trend claims. It does not receive results from `/api/analyze`.
+The Research Lab uses `POST /api/research-assistant` for variable and research-direction suggestions. Dataset recommendations are actual results from a live NASA CMR collection search, not a hardcoded dataset list. CMR is metadata-only; it is not evidence that the underlying dataset was downloaded or analyzed. Without an LLM key, the assistant uses a guided keyword matcher. To enable an optional OpenAI-compatible model, copy `.env.example` to `.env` and set `EARTH_PULSE_LLM_API_KEY` (and, if needed, the API URL and model). The key stays on the backend. The model selects fixed variable and direction IDs; it cannot supply numbers, statistics, or trends. No LLM is used to calculate results.
 
 ### Research reports and downloads
 
@@ -78,18 +106,52 @@ After an analysis on `/investigate` or the Multi-variable tool, open `/report` t
 1. Pick your location on `/investigate` (or search for a place).
 2. View the 20-year temperature trend and its data limitations.
 3. Compare with another region using the second-place map selection.
-4. Ask a future yes/no question on `/future`.
+4. Ask a future yes/no question on `/future` and choose a NASA scenario; inspect model agreement, not a probability.
 5. Open `/report` and download the report or CSV.
+
+The judge-facing 60–90 second walkthrough is in
+[docs/JUDGE_DEMO_SCRIPT.md](docs/JUDGE_DEMO_SCRIPT.md).
+
+## Public About page
+
+Visit `/about` for the project overview, historical and future experiences,
+data sources, methodology, limitations, team placeholders, and source code
+link. Earth Pulse does not require visitor accounts. Historical reports remain
+in the visitor's browser.
+
+## Deploy publicly
+
+The deployment configuration is prepared for Vercel (frontend) and Render
+(FastAPI backend). Follow the account and environment-variable steps in
+[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md). Deployment still requires the project
+owner to connect the repository through their Vercel and Render accounts. No
+live deployment or public URL is claimed here.
+
+After both services have real public URLs, provide them and test the public
+site. The results log is [docs/PUBLIC_TEST_RESULTS.md](docs/PUBLIC_TEST_RESULTS.md);
+it remains marked not run until those public checks actually happen.
+
+### Live NASA verification (not a unit test)
+
+From the repository root, run:
+
+```powershell
+python scripts\verify_live_nasa.py
+```
+
+This script makes real requests to POWER temperature and precipitation, discovers projection models and requests projection data, and searches CMR. It is intentionally separate from `pytest`, uses no synthetic fixtures, prints the endpoints and response timestamps/coverage, and exits nonzero if an upstream request or response check fails. Its output is a point-in-time report; do not claim a live request succeeded unless it actually completes successfully.
 
 ## Project layout
 
 ```text
 frontend/  Next.js App Router application, reusable UI components, and design system
 backend/   FastAPI application with routers, models, and services
-.env.example  Example local environment settings (contains no credentials)
+render.yaml  Render Blueprint for the Python API
+frontend/vercel.json  Vercel Next.js build configuration
+.env.example  Example local backend settings (contains no credentials)
 ```
 
-The `/investigate` page analyzes temperature or rainfall at a chosen location and can compare two locations. The `/future` page estimates the chance of a selected threshold being crossed in a future period. The `/lab` page provides research suggestions and a multi-variable analysis; currently only temperature and rainfall are connected, and soil moisture is shown as unavailable. `/methodology` explains the data and methods in simple language. Analysis pages use NASA POWER historical data; missing values are reported rather than generated or substituted. Trend testing uses complete annual values to avoid mistaking seasonal cycles for long-term trends. These results describe patterns in the data and do not identify their causes.
+The `/investigate` page analyzes temperature or rainfall at a chosen location and can compare two locations. The `/future` page compares a visitor's yes/no threshold with NASA scenario-based climate projections and reports model agreement without inventing a probability. The `/lab` page offers guided research, real NASA CMR metadata search, and multi-variable historical analysis; currently only temperature and rainfall are connected, and soil moisture is shown as unavailable. `/methodology` explains the data and methods in simple language; `/about` describes the project, sources, limitations, team placeholders, and source repository. Historical analysis uses NASA POWER; projection data uses NASA POWER's Projection API; CMR is metadata-only. Missing values are reported rather than generated or substituted. Historical trend testing uses complete annual values to avoid mistaking seasonal cycles for long-term trends. Results describe patterns in the data and do not identify their causes.
 
 Run backend tests from the `backend` folder with:
 
@@ -97,16 +159,31 @@ Run backend tests from the `backend` folder with:
 pytest
 ```
 
-The real-data audit and documented resolutions are in [docs/REAL_DATA_AUDIT.md](docs/REAL_DATA_AUDIT.md).
+The real-data audit and documented resolutions are in [docs/REAL_DATA_AUDIT.md](docs/REAL_DATA_AUDIT.md). Read [NASA_DATA_PROVENANCE.md](docs/NASA_DATA_PROVENANCE.md), [SCIENTIFIC_METHODOLOGY.md](docs/SCIENTIFIC_METHODOLOGY.md), and [DATA_LIMITATIONS.md](docs/DATA_LIMITATIONS.md) for source and method details.
 
 ## Environment settings
 
-The frontend defaults to `http://localhost:8000`; set `NEXT_PUBLIC_API_URL` in the frontend environment only if the backend uses another address. For the optional research-assistant model, copy `.env.example` to the repository-root `.env` and set the private `EARTH_PULSE_LLM_API_KEY`. Never commit real API keys. The core analysis and guided research suggestions work without an external model.
+- The frontend reads `frontend/.env.local`. Copy `frontend/.env.example` to
+  `frontend/.env.local` for local development; it sets
+  `NEXT_PUBLIC_API_URL=http://127.0.0.1:8000`. For production, set it in Vercel
+  to the actual Render API origin before redeploying. This is a public URL,
+  not a secret.
+- The backend reads the repository-root `.env`. Configure
+  `EARTH_PULSE_CORS_ORIGINS` with the exact browser origin(s); local defaults
+  allow ports 3000 on localhost. Production values must be explicit HTTPS
+  origins. Wildcards are rejected.
+- `EARTH_PULSE_LLM_API_KEY` is optional and backend-only. Never put it in a
+  `NEXT_PUBLIC_` variable or commit it. The core data and guided research
+  suggestions work without an external model.
+
+See [.env.example](.env.example), [frontend/.env.example](frontend/.env.example),
+and [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) for variable details.
 
 ## Known limitations
 
 - The connected environmental variables are monthly temperature and precipitation; soil moisture is not available in the current provider.
 - NASA POWER's current point records are model-derived MERRA-2 reanalysis, not direct measurements at a household or exact map point.
-- Monthly values cannot resolve daily extremes. Future probabilities are statistical estimates, not official forecasts.
+- Monthly values cannot resolve daily extremes. Climate projections are scenario-based and are not official forecasts or probability estimates.
 - The report snapshot is local to one browser. The generated PDF uses jsPDF's built-in Latin font; Hindi text in a custom report question may not render correctly in the PDF, while the on-page report and UTF-8 CSV retain the text.
-- The optional model provides fixed-category research recommendations only. It does not calculate, explain, or receive climate trends.
+- The optional model provides fixed-category research suggestions only. It does not calculate, explain, or receive climate trends.
+- CMR metadata search does not download or analyze a dataset; linked resources may require NASA Earthdata Login.
