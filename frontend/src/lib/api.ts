@@ -1,0 +1,265 @@
+export type ClimateVariable = "temperature" | "rainfall";
+export type ResearchAssistantResponse = {
+  assistant_mode: "llm" | "guided";
+  suggested_variables: {
+    id: ClimateVariable;
+    title: string;
+    description: string;
+    available_in_analysis: boolean;
+  }[];
+  suggested_datasets: {
+    id: "nasa_power" | "merra_2" | "gpm_imerg";
+    title: string;
+    description: string;
+    url: string;
+    available_in_analysis: boolean;
+  }[];
+  research_directions: {
+    id:
+      | "compare_variables"
+      | "check_seasonal_patterns"
+      | "compare_nearby_places"
+      | "check_data_gaps";
+    description: string;
+  }[];
+};
+export type TrendDirection = "increasing" | "decreasing" | "no clear trend";
+export type ProbabilityCondition = "above" | "below";
+export type ProbabilityWindow = "next_summer" | "year";
+
+export type Coordinates = {
+  latitude: number;
+  longitude: number;
+};
+
+export type PlaceLocation = Coordinates & {
+  label: string;
+};
+
+export type GeocodingResult = Coordinates & {
+  display_name: string;
+};
+
+export type SeriesPoint = {
+  period: string;
+  value: number | null;
+  trend_value: number | null;
+  confidence_lower: number | null;
+  confidence_upper: number | null;
+};
+
+export type AnalyzeResponse = {
+  latitude: number;
+  longitude: number;
+  variable: ClimateVariable;
+  monthly_time_series: {
+    frequency: "monthly";
+    units: string;
+    records: SeriesPoint[];
+  };
+  annual_time_series: {
+    frequency: "annual";
+    units: string;
+    records: SeriesPoint[];
+  };
+  data_availability: {
+    expected_months: number;
+    missing_months: number;
+    complete_years: number;
+    incomplete_years: number[];
+  };
+  trend: {
+    direction: TrendDirection;
+    rate_of_change: number;
+    rate_units: string;
+    significant: boolean;
+    test_names: string[];
+    mann_kendall_test: string;
+    mann_kendall_p_value: number;
+    sen_slope_per_year: number;
+    linear_regression: {
+      slope_per_year: number;
+      intercept: number;
+      p_value: number;
+      confidence_interval_95: [number, number];
+      r_squared: number;
+    };
+  };
+  dataset: {
+    name: string;
+    version: string;
+    source: string;
+    data_type: string;
+    parameter_name: string;
+    source_units: string;
+    monthly_units: string;
+    annual_units: string;
+    requested_start_year: number;
+    requested_end_year: number;
+    first_observation: string | null;
+    last_observation: string | null;
+    aggregation: string;
+    source_url: string;
+    retrieved_at_utc: string;
+    cache_status: "live" | "cached";
+    grid_cell_latitude: number;
+    grid_cell_longitude: number;
+  };
+  limitations: string[];
+  plain_language: string;
+};
+
+export type ResearchReportSnapshot = {
+  question: string;
+  location: PlaceLocation;
+  start_year: number;
+  end_year: number;
+  analyses: {
+    place: PlaceLocation;
+    result: AnalyzeResponse;
+  }[];
+};
+
+export type ProbabilityResponse = {
+  latitude: number;
+  longitude: number;
+  variable: ClimateVariable;
+  condition: ProbabilityCondition;
+  threshold: number;
+  units: string;
+  time_window: string;
+  target_year: number;
+  target_months: string[];
+  probability_percent: number;
+  confidence_range_percent: [number, number];
+  historical_events: number;
+  historical_periods: number;
+  historical_probability_percent: number;
+  method: string;
+  data_used: {
+    dataset_name: string;
+    dataset_version: string;
+    source: string;
+    data_type: string;
+    parameter_name: string;
+    source_units: string;
+    analysis_units: string;
+    requested_start_year: number;
+    requested_end_year: number;
+    complete_periods: number;
+    missing_periods: number;
+    source_url: string;
+    retrieved_at_utc: string;
+    cache_status: "live" | "cached";
+    grid_cell_latitude: number;
+    grid_cell_longitude: number;
+    historical_values: { year: number; value: number }[];
+    trend_direction: TrendDirection;
+    trend_significant: boolean;
+    trend_rate_per_decade: number;
+  };
+  assumptions: string[];
+  limitations: string[];
+  plain_language: string;
+};
+
+export type AnalyzeRequest = {
+  lat: number;
+  lon: number;
+  variable: ClimateVariable;
+  start_year?: number;
+  end_year?: number;
+  frequency: "monthly";
+};
+
+export type EstimateProbabilityRequest = {
+  lat: number;
+  lon: number;
+  variable: ClimateVariable;
+  condition: ProbabilityCondition;
+  threshold: number;
+  time_window: ProbabilityWindow;
+  target_year?: number;
+  start_year?: number;
+  end_year?: number;
+};
+
+const API_BASE_URL = (
+  process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000"
+).replace(/\/+$/, "");
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE_URL}${path}`, {
+      ...init,
+      cache: "no-store",
+      headers: {
+        "Content-Type": "application/json",
+        ...init?.headers,
+      },
+    });
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : "network request failed";
+    throw new Error(`Could not connect to the Earth Pulse API: ${reason}`);
+  }
+
+  let body: unknown;
+  try {
+    body = await response.json();
+  } catch {
+    throw new Error("The Earth Pulse API returned an unreadable response.");
+  }
+
+  if (!response.ok) {
+    let message = `The Earth Pulse API returned HTTP ${response.status}.`;
+    if (isRecord(body) && isRecord(body.detail)) {
+      if (body.detail.data_source === "NASA POWER") {
+        message = "NASA data could not be retrieved. Please try again.";
+      } else if (typeof body.detail.message === "string") {
+        message = body.detail.message;
+      }
+    } else if (isRecord(body) && typeof body.detail === "string") {
+      message = body.detail;
+    }
+    throw new Error(message);
+  }
+
+  return body as T;
+}
+
+export function analyzeLocation(request: AnalyzeRequest): Promise<AnalyzeResponse> {
+  return requestJson<AnalyzeResponse>("/api/analyze", {
+    method: "POST",
+    body: JSON.stringify(request),
+  });
+}
+
+export function estimateLocationProbability(
+  request: EstimateProbabilityRequest,
+): Promise<ProbabilityResponse> {
+  return requestJson<ProbabilityResponse>("/api/probability", {
+    method: "POST",
+    body: JSON.stringify(request),
+  });
+}
+
+export function searchPlaces(query: string): Promise<GeocodingResult[]> {
+  const search = new URLSearchParams({ q: query });
+  return requestJson<GeocodingResult[]>(`/api/geocode?${search.toString()}`, {
+    method: "GET",
+  });
+}
+
+export function getResearchSuggestions(
+  question: string,
+): Promise<ResearchAssistantResponse> {
+  return requestJson<ResearchAssistantResponse>("/api/research-assistant", {
+    method: "POST",
+    body: JSON.stringify({ question }),
+  });
+}
