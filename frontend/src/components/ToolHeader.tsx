@@ -1,4 +1,8 @@
+"use client";
+
 import Link from "next/link";
+import { useEffect, useState } from "react";
+import { checkBackendConnection } from "@/lib/api";
 import { useLanguage } from "@/lib/language";
 
 type ToolHeaderProps = {
@@ -7,6 +11,9 @@ type ToolHeaderProps = {
 
 export default function ToolHeader({ currentPage }: ToolHeaderProps) {
   const { language, setLanguage } = useLanguage();
+  const [backendStatus, setBackendStatus] = useState<
+    "checking" | "connected" | "unavailable"
+  >("checking");
   const localizedPage =
     language === "hi"
       ? {
@@ -18,6 +25,38 @@ export default function ToolHeader({ currentPage }: ToolHeaderProps) {
           "About Earth Pulse": "Earth Pulse के बारे में",
         }[currentPage] ?? currentPage
       : currentPage;
+
+  useEffect(() => {
+    let active = true;
+    const checkConnection = async () => {
+      try {
+        await checkBackendConnection();
+        if (active) setBackendStatus("connected");
+      } catch {
+        if (active) setBackendStatus("unavailable");
+      }
+    };
+
+    void checkConnection();
+    const intervalId = window.setInterval(() => void checkConnection(), 30_000);
+    return () => {
+      active = false;
+      window.clearInterval(intervalId);
+    };
+  }, []);
+
+  const statusLabel =
+    language === "hi"
+      ? {
+          checking: "API: कनेक्शन जाँच रहे हैं",
+          connected: "API: कनेक्टेड",
+          unavailable: "API: उपलब्ध नहीं",
+        }[backendStatus]
+      : {
+          checking: "Backend: Checking connection",
+          connected: "Backend: Connected",
+          unavailable: "Backend: Unavailable",
+        }[backendStatus];
 
   return (
     <header className="tool-header">
@@ -32,6 +71,14 @@ export default function ToolHeader({ currentPage }: ToolHeaderProps) {
       </Link>
       <span className="tool-header__current">{localizedPage}</span>
       <div className="tool-header__actions">
+        <span
+          className={`backend-connection-status backend-connection-status--${backendStatus}`}
+          role="status"
+          aria-live="polite"
+        >
+          <span className="backend-connection-status__dot" aria-hidden="true" />
+          {statusLabel}
+        </span>
         <div className="language-toggle" role="group" aria-label="Choose language / भाषा चुनें">
           <button
             type="button"

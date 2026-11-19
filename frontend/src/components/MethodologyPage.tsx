@@ -120,8 +120,8 @@ export default function MethodologyPage() {
             </li>
             <li>
               {hindi
-                ? "भविष्य की संभावना अतीत के डेटा से बना सांख्यिकीय अनुमान है, आधिकारिक जलवायु पूर्वानुमान नहीं।"
-                : "A future probability is a statistical estimate based on past data, not an official climate forecast."}
+                ? "भविष्य वाला पृष्ठ चुने गए परिदृश्य के जलवायु-मॉडल प्रक्षेपणों की चुनी हुई सीमा से तुलना करता है। सीमा पूरी करने वाले उपलब्ध मॉडलों की संख्या मॉडल-सहमति है, संभावना या आधिकारिक पूर्वानुमान नहीं।"
+                : "The future page compares scenario-based climate-model projections with a selected threshold. The number of available models that meet it is model agreement, not a probability or official forecast."}
             </li>
           </ul>
         </section>

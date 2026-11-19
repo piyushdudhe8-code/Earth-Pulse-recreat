@@ -7,3 +7,4 @@ scipy==1.15.2
 pymannkendall==1.4.3
 python-dotenv==1.1.0
 pytest==8.3.5
+httpx==0.28.1

@@ -7,42 +7,48 @@ Earth Pulse is a simple, accessible starting point for exploring how Earth's cli
 - Node.js 20 or newer and npm
 - Python 3.10 or newer
 
-## Start both servers
+## Start the application on Windows
 
-After installing the frontend dependencies and creating `backend\venv` with
-the packages in `backend\requirements.txt`, run this from the project root.
-It frees ports 3000 and 8000 and opens separate PowerShell windows for the
-frontend and backend:
+Open two PowerShell terminals in the project root. After installing the
+dependencies as shown below, run:
 
 ```powershell
-.\start-dev.ps1
+.\scripts\start-backend.ps1
 ```
 
-## Run the frontend
+In the second terminal:
 
 ```powershell
-cd frontend
-Copy-Item .env.example .env.local
+.\scripts\start-frontend.ps1
+```
+
+The frontend is at [http://localhost:3000](http://localhost:3000); the API is
+at [http://127.0.0.1:8000](http://127.0.0.1:8000), with health and interactive
+docs at `/health` and `/docs`. The scripts check their Python/Node setup and
+refuse to start when the required port is occupied; they do not stop processes.
+To open both in separate windows, run `.\start-dev.ps1`.
+See [docs/LOCAL_DEVELOPMENT.md](docs/LOCAL_DEVELOPMENT.md) for environment,
+production, test, and live NASA verification commands, and
+[docs/API_CONNECTION_AUDIT.md](docs/API_CONNECTION_AUDIT.md) for the connection
+audit and verified results.
+
+### One-time setup
+
+```powershell
+py -3 -m venv .\backend\venv
+& .\backend\venv\Scripts\python.exe -m pip install -r .\backend\requirements.txt
+Push-Location .\frontend
 npm.cmd install
-npm.cmd run dev
+Pop-Location
+if (-not (Test-Path .\frontend\.env.local)) {
+    Copy-Item .\frontend\.env.local.example .\frontend\.env.local
+}
 ```
 
-Open [http://localhost:3000](http://localhost:3000).
-
-## Run the backend
-
-In a second terminal, from the repository root:
-
-```powershell
-Copy-Item .env.example .env
-cd backend
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
-pip install -r requirements.txt
-uvicorn app.main:app --reload
-```
-
-The health endpoint is at [http://localhost:8000/health](http://localhost:8000/health). The backend allows requests from `http://localhost:3000`, `http://127.0.0.1:3000`, and `http://192.168.225.145:3000`.
+`frontend\.env.local` is loaded when Next.js starts and should contain
+`NEXT_PUBLIC_API_URL=http://127.0.0.1:8000`. Restart the frontend after changing
+that value. The checked-in `.env.local.example` is safe to copy and contains no
+secrets.
 
 ### Analyze NASA POWER data
 
@@ -160,6 +166,10 @@ pytest
 ```
 
 The real-data audit and documented resolutions are in [docs/REAL_DATA_AUDIT.md](docs/REAL_DATA_AUDIT.md). Read [NASA_DATA_PROVENANCE.md](docs/NASA_DATA_PROVENANCE.md), [SCIENTIFIC_METHODOLOGY.md](docs/SCIENTIFIC_METHODOLOGY.md), and [DATA_LIMITATIONS.md](docs/DATA_LIMITATIONS.md) for source and method details.
+
+The local API connectivity findings, checks, and troubleshooting steps are in
+[docs/API_CONNECTION_AUDIT.md](docs/API_CONNECTION_AUDIT.md) and
+[docs/LOCAL_DEVELOPMENT.md](docs/LOCAL_DEVELOPMENT.md).
 
 ## Environment settings
 

@@ -104,9 +104,10 @@ NASA analysis features.
 
 For local development, the API reads the repository-root `.env` file. Copy
 `.env.example` to `.env` and adjust it only if needed. The frontend reads
-`frontend/.env.local`; `NEXT_PUBLIC_API_URL` may be left blank during local
-development because the app uses `http://localhost:8000` as its development
-default. Never put private credentials in `frontend/.env.local`.
+`frontend/.env.local`; set `NEXT_PUBLIC_API_URL=http://127.0.0.1:8000` for
+local development. This setting is required and is embedded when Next.js
+starts or builds, so restart the frontend after changing it. Never put private
+credentials in `frontend/.env.local`.
 
 ## Production checks and known limits
 

@@ -268,15 +268,80 @@ export type EstimateProbabilityRequest = {
   end_year?: number;
 };
 
-const configuredApiUrl = process.env.NEXT_PUBLIC_API_URL?.trim();
-const API_BASE_URL = configuredApiUrl
-  ? configuredApiUrl.replace(/\/+$/, "")
-  : process.env.NODE_ENV === "development"
-    ? "http://localhost:8000"
-    : "";
+const REQUEST_TIMEOUT_MS = 90_000;
+
+function getApiBaseUrl(): string {
+  const configuredApiUrl = process.env.NEXT_PUBLIC_API_URL?.trim();
+  if (!configuredApiUrl) {
+    throw new Error(
+      "The Earth Pulse API is not configured. Set NEXT_PUBLIC_API_URL to the backend origin before starting or building the frontend.",
+    );
+  }
+
+  let url: URL;
+  try {
+    url = new URL(configuredApiUrl);
+  } catch {
+    throw new Error(
+      "NEXT_PUBLIC_API_URL must be an absolute HTTP or HTTPS backend origin.",
+    );
+  }
+
+  if (
+    !["http:", "https:"].includes(url.protocol) ||
+    url.username ||
+    url.password ||
+    url.pathname !== "/" ||
+    url.search ||
+    url.hash
+  ) {
+    throw new Error(
+      "NEXT_PUBLIC_API_URL must contain only the backend origin, without credentials, a path, query, or fragment.",
+    );
+  }
+
+  return url.origin;
+}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function httpErrorMessage(status: number, body: unknown): string {
+  const detail = isRecord(body) ? body.detail : undefined;
+  const detailMessage =
+    typeof detail === "string"
+      ? detail
+      : isRecord(detail) && typeof detail.message === "string"
+        ? detail.message
+        : undefined;
+  const dataSource =
+    isRecord(detail) && typeof detail.data_source === "string"
+      ? detail.data_source
+      : undefined;
+
+  if (status === 404) {
+    return detailMessage
+      ? `The Earth Pulse API route was not found (HTTP 404): ${detailMessage}`
+      : "The Earth Pulse API route was not found (HTTP 404). Check that the frontend and backend versions match.";
+  }
+  if (status === 422) {
+    return detailMessage
+      ? `The request could not be processed (HTTP 422): ${detailMessage}`
+      : "The request was not valid for this API endpoint (HTTP 422). Check the submitted values.";
+  }
+  if (status === 502 && dataSource) {
+    return `${dataSource} returned an upstream error (HTTP 502). The Earth Pulse backend is reachable, but the upstream request failed.${detailMessage ? ` ${detailMessage}` : ""}`;
+  }
+  if (status === 500) {
+    return detailMessage
+      ? `The Earth Pulse backend encountered an internal error (HTTP 500): ${detailMessage}`
+      : "The Earth Pulse backend encountered an internal error (HTTP 500). Check the backend logs.";
+  }
+
+  return detailMessage
+    ? `The Earth Pulse API returned HTTP ${status}: ${detailMessage}`
+    : `The Earth Pulse API returned HTTP ${status}.`;
 }
 
 export function getProjectionModelCatalog(): Promise<{
@@ -308,49 +373,68 @@ export function searchCMRCollections(
 }
 
 async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
-  if (!API_BASE_URL) {
-    throw new Error(
-      "The Earth Pulse API is not configured. Set NEXT_PUBLIC_API_URL for this deployment.",
-    );
+  const apiBaseUrl = getApiBaseUrl();
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  const headers = new Headers(init?.headers);
+  if (init?.body !== undefined && !headers.has("Content-Type")) {
+    headers.set("Content-Type", "application/json");
   }
 
   let response: Response;
+  let responseText: string;
   try {
-    response = await fetch(`${API_BASE_URL}${path}`, {
+    response = await fetch(`${apiBaseUrl}${path.startsWith("/") ? path : `/${path}`}`, {
       ...init,
       cache: "no-store",
-      headers: {
-        "Content-Type": "application/json",
-        ...init?.headers,
-      },
+      headers,
+      signal: init?.signal ?? controller.signal,
     });
+    responseText = await response.text();
   } catch (error) {
-    const reason = error instanceof Error ? error.message : "network request failed";
-    throw new Error(`Could not connect to the Earth Pulse API: ${reason}`);
+    if (controller.signal.aborted) {
+      throw new Error(
+        `The Earth Pulse API request timed out after ${REQUEST_TIMEOUT_MS / 1000} seconds.`,
+      );
+    }
+    if (error instanceof TypeError) {
+      throw new Error(
+        `Could not reach the Earth Pulse API at ${apiBaseUrl}. The backend may be stopped, or the browser may have blocked the request because of CORS or a network policy. Confirm the backend is reachable at this address and allows this frontend origin.`,
+      );
+    }
+    const reason = error instanceof Error ? error.message : "request failed";
+    throw new Error(`The Earth Pulse API request could not be completed: ${reason}`);
+  } finally {
+    clearTimeout(timeoutId);
   }
 
   let body: unknown;
-  try {
-    body = await response.json();
-  } catch {
-    throw new Error("The Earth Pulse API returned an unreadable response.");
+  if (responseText) {
+    try {
+      body = JSON.parse(responseText);
+    } catch {
+      if (!response.ok) {
+        throw new Error(httpErrorMessage(response.status, undefined));
+      }
+      throw new Error("The Earth Pulse API returned invalid JSON.");
+    }
   }
 
   if (!response.ok) {
-    let message = `The Earth Pulse API returned HTTP ${response.status}.`;
-    if (isRecord(body) && isRecord(body.detail)) {
-      if (body.detail.data_source === "NASA POWER") {
-        message = "NASA data could not be retrieved. Please try again.";
-      } else if (typeof body.detail.message === "string") {
-        message = body.detail.message;
-      }
-    } else if (isRecord(body) && typeof body.detail === "string") {
-      message = body.detail;
-    }
-    throw new Error(message);
+    throw new Error(httpErrorMessage(response.status, body));
+  }
+  if (body === undefined) {
+    throw new Error("The Earth Pulse API returned an empty response instead of JSON.");
   }
 
   return body as T;
+}
+
+export async function checkBackendConnection(): Promise<void> {
+  const health = await requestJson<{ status: string }>("/health");
+  if (health.status !== "ok") {
+    throw new Error("The Earth Pulse backend returned an unhealthy status.");
+  }
 }
 
 export function analyzeLocation(request: AnalyzeRequest): Promise<AnalyzeResponse> {

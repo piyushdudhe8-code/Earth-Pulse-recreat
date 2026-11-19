@@ -19,7 +19,7 @@ const copy = {
     step1Title: "Pick a place",
     step1: "Choose somewhere on Earth that matters to you.",
     step2Title: "We get real NASA data",
-    step2: "We look at trusted observations and climate records.",
+    step2: "We use model-based historical climate data and future climate-model projections.",
     step3Title: "You see the story",
     step3: "Clear pictures and plain words help make sense of change.",
     toolsTitle: "Explore more tools",
@@ -29,13 +29,16 @@ const copy = {
     variablesDescription: "Explore how different parts of Earth's climate connect.",
     reportTitle: "Research Report Generator",
     reportDescription: "Turn your investigation into a clear, shareable report.",
-    dataTitle: "Where our data comes from",
-    power: "NASA POWER — weather and solar data for places around the world.",
-    earthdata: "NASA Earthdata / GES DISC — Earth science data and records.",
-    merra: "MERRA-2 — NASA's record of the atmosphere over time.",
-    gpm: "GPM IMERG — measurements of rain and snow around the world.",
+    dataTitle: "Our data: what's connected and what's a reference",
+    activeDataTitle: "Connected to Earth Pulse features",
+    referenceDataTitle: "Reference only — not used in current calculations",
+    power: "NASA POWER — active source of the historical monthly temperature and corrected-precipitation data used by Earth Pulse. These records are based on MERRA-2 model reanalysis, not direct measurements at your selected location.",
+    projection: "NASA POWER Projection API — active source for scenario-based future climate-model projections, not observations or a weather forecast.",
+    cmr: "NASA CMR — active catalogue search for dataset metadata only; Earth Pulse does not download or analyze the listed datasets.",
+    earthdata: "NASA Earthdata / GES DISC — an archive and discovery resource, not a data feed for Earth Pulse's current calculations.",
+    gpm: "GPM IMERG — NASA precipitation estimates listed for reference; they are not integrated into the current analyses.",
     note:
-      "The temperature and precipitation analyses here use NASA POWER MERRA-2 reanalysis, which is model-derived. We label it clearly.",
+      "Historical temperature and precipitation analyses use NASA POWER's monthly MERRA-2 reanalysis. These are model-based grid estimates, not direct measurements at your exact location.",
     footer: "Curiosity is a great place to start.",
     toolsLink: "Open tool",
     learnMore: "Learn about the data source",
@@ -56,7 +59,7 @@ const copy = {
     step1Title: "एक जगह चुनें",
     step1: "पृथ्वी पर ऐसी जगह चुनें जो आपके लिए मायने रखती हो।",
     step2Title: "हम NASA का असली डेटा लाते हैं",
-    step2: "हम भरोसेमंद माप और जलवायु रिकॉर्ड देखते हैं।",
+    step2: "हम मॉडल-आधारित ऐतिहासिक जलवायु डेटा और भविष्य के जलवायु-मॉडल प्रक्षेपणों का उपयोग करते हैं।",
     step3Title: "आप बदलाव की कहानी देखते हैं",
     step3: "आसान चित्र और सरल शब्द बदलाव को समझने में मदद करते हैं।",
     toolsTitle: "और टूल देखें",
@@ -66,13 +69,16 @@ const copy = {
     variablesDescription: "जानें कि पृथ्वी की जलवायु के अलग-अलग हिस्से कैसे जुड़े हैं।",
     reportTitle: "रिसर्च रिपोर्ट बनाएँ",
     reportDescription: "अपनी जाँच को साफ़ और साझा करने योग्य रिपोर्ट में बदलें।",
-    dataTitle: "हमारा डेटा कहाँ से आता है",
-    power: "NASA POWER — दुनिया भर की जगहों का मौसम और सूरज की ऊर्जा का डेटा।",
-    earthdata: "NASA Earthdata / GES DISC — पृथ्वी विज्ञान का डेटा और रिकॉर्ड।",
-    merra: "MERRA-2 — समय के साथ वातावरण का NASA रिकॉर्ड।",
-    gpm: "GPM IMERG — दुनिया भर में बारिश और बर्फ़ का माप।",
+    dataTitle: "हमारा डेटा: क्या जुड़ा है और क्या केवल संदर्भ है",
+    activeDataTitle: "Earth Pulse की सुविधाओं से जुड़े स्रोत",
+    referenceDataTitle: "केवल संदर्भ — मौजूदा गणनाओं में उपयोग नहीं",
+    power: "NASA POWER — Earth Pulse में इस्तेमाल होने वाले ऐतिहासिक मासिक तापमान और सुधारी गई वर्षा का सक्रिय स्रोत। ये रिकॉर्ड MERRA-2 के मॉडल-आधारित री-एनालिसिस पर आधारित हैं, चुनी हुई जगह पर सीधे किए गए माप नहीं।",
+    projection: "NASA POWER Projection API — परिदृश्य-आधारित भविष्य के जलवायु-मॉडल प्रक्षेपणों का सक्रिय स्रोत; यह माप या मौसम का पूर्वानुमान नहीं है।",
+    cmr: "NASA CMR — केवल डेटासेट मेटाडेटा खोजने की सुविधा; Earth Pulse सूचीबद्ध डेटासेट डाउनलोड या विश्लेषित नहीं करता।",
+    earthdata: "NASA Earthdata / GES DISC — डेटा संग्रह और खोज का संदर्भ स्रोत; मौजूदा गणनाएँ यहाँ से डेटा नहीं लेतीं।",
+    gpm: "GPM IMERG — NASA के वर्षा अनुमान, केवल संदर्भ के लिए; ये मौजूदा विश्लेषणों में जुड़े नहीं हैं।",
     note:
-      "यहाँ तापमान और वर्षा का विश्लेषण NASA POWER के MERRA-2 री-एनालिसिस पर आधारित है, जो मॉडल से निकला डेटा है। हम इसे साफ़-साफ़ बताते हैं।",
+      "ऐतिहासिक तापमान और वर्षा का विश्लेषण NASA POWER के मासिक MERRA-2 री-एनालिसिस पर आधारित है। ये मॉडल-आधारित ग्रिड अनुमान हैं, आपकी चुनी हुई जगह पर सीधे किए गए माप नहीं।",
     footer: "जिज्ञासा से ही अच्छी शुरुआत होती है।",
     toolsLink: "टूल खोलें",
     learnMore: "डेटा स्रोत के बारे में जानें",
@@ -209,10 +215,15 @@ export default function HomePage() {
             <h2 id="data-title">{text.dataTitle}</h2>
             <p>{text.note}</p>
           </div>
+          <h3>{text.activeDataTitle}</h3>
           <ul className="data-list">
             <li><a href="https://power.larc.nasa.gov/" target="_blank" rel="noreferrer"><span>{text.power}</span><span aria-hidden="true">↗</span></a></li>
+            <li><a href="https://power.larc.nasa.gov/docs/services/api/projection/" target="_blank" rel="noreferrer"><span>{text.projection}</span><span aria-hidden="true">↗</span></a></li>
+            <li><a href="https://cmr.earthdata.nasa.gov/search/site/docs/search/api.html" target="_blank" rel="noreferrer"><span>{text.cmr}</span><span aria-hidden="true">↗</span></a></li>
+          </ul>
+          <h3>{text.referenceDataTitle}</h3>
+          <ul className="data-list">
             <li><a href="https://disc.gsfc.nasa.gov/" target="_blank" rel="noreferrer"><span>{text.earthdata}</span><span aria-hidden="true">↗</span></a></li>
-            <li><a href="https://gmao.gsfc.nasa.gov/reanalysis/MERRA-2/" target="_blank" rel="noreferrer"><span>{text.merra}</span><span aria-hidden="true">↗</span></a></li>
             <li><a href="https://gpm.nasa.gov/data/imerg" target="_blank" rel="noreferrer"><span>{text.gpm}</span><span aria-hidden="true">↗</span></a></li>
           </ul>
           <a className="methodology-link" href="/methodology">

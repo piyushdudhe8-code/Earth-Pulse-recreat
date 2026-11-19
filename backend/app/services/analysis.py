@@ -89,14 +89,6 @@ def analyze_location(
         "first_observation": prepared.first_observation,
         "last_observation": prepared.last_observation,
     }
-    if request.start_year is None and len(prepared.annual_years) < 20:
-        raise AnalysisUnavailableError(
-            (
-                f"NASA POWER returned only {len(prepared.annual_years)} complete years "
-                "for the latest available period; 20 are required."
-            ),
-            {**availability, "requested_complete_years": 20},
-        )
     if len(prepared.annual_years) < MINIMUM_COMPLETE_YEARS:
         raise AnalysisUnavailableError(
             (

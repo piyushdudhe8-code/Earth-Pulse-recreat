@@ -28,7 +28,6 @@ def cors_origins_from_env(raw_origins: str | None) -> list[str]:
         return [
             "http://localhost:3000",
             "http://127.0.0.1:3000",
-            "http://192.168.225.145:3000",
         ]
 
     origins = [origin.strip().rstrip("/") for origin in raw_origins.split(",")]
@@ -44,7 +43,6 @@ def cors_origins_from_env(raw_origins: str | None) -> list[str]:
             "localhost",
             "127.0.0.1",
             "::1",
-            "192.168.225.145",
         }
         if (
             parsed.scheme not in {"http", "https"}
@@ -68,7 +66,7 @@ app.add_middleware(
     allow_origins=cors_origins_from_env(os.getenv("EARTH_PULSE_CORS_ORIGINS")),
     allow_credentials=False,
     allow_methods=["GET", "POST"],
-    allow_headers=["*"],
+    allow_headers=["Content-Type", "Authorization"],
 )
 
 
